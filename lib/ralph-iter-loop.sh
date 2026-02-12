@@ -43,7 +43,7 @@ ralph_iter_loop() {
       --output-format stream-json \
       --dangerously-skip-permissions \
       --append-system-prompt "$(cat "$provider_instructions")" \
-      "$prompt_file" \
+      "@$prompt_file" \
     | grep --line-buffered '^{' \
     | tee "$tmpfile" \
     | jq --unbuffered -rj "$stream_text"

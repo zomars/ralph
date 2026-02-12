@@ -15,4 +15,4 @@ fi
 claude \
   --permission-mode acceptEdits \
   --append-system-prompt "$(cat "$provider_instructions")" \
-  "$prompt_file"
+  "@$prompt_file"
