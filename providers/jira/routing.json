@@ -18,8 +18,8 @@
         "labels_exclude": null,
         "description_condition": "empty_or_todo_or_label_needs_planning"
       },
-      "script": "ralph/afk-planner.sh",
-      "prompt": "ralph/prompt-planner.md"
+      "script": "bin/afk-planner",
+      "prompt": "prompts/planner.md"
     },
     "implementer": {
       "jql": "assignee = currentUser() AND status in ('To Do', 'In Progress') AND (description is not EMPTY AND description !~ 'TODO') AND labels not in ('needs-tests', 'tech-debt', 'ralph-blocked', 'needs-planning') ORDER BY priority DESC",
@@ -29,8 +29,8 @@
         "labels_exclude": ["needs-tests", "tech-debt", "ralph-blocked", "needs-planning"],
         "description_condition": "not_empty_and_not_todo"
       },
-      "script": "ralph/afk-implementer.sh",
-      "prompt": "ralph/prompt-implementer.md"
+      "script": "bin/afk-implementer",
+      "prompt": "prompts/implementer.md"
     },
     "reviewer": {
       "jql": "assignee = currentUser() AND status = 'In Review' AND labels not in ('needs-planning', 'needs-tests', 'tech-debt') ORDER BY priority DESC",
@@ -40,8 +40,8 @@
         "labels_exclude": ["needs-planning", "needs-tests", "tech-debt"],
         "description_condition": null
       },
-      "script": "ralph/afk-reviewer.sh",
-      "prompt": "ralph/prompt-reviewer.md"
+      "script": "bin/afk-reviewer",
+      "prompt": "prompts/reviewer.md"
     },
     "tester": {
       "jql": "assignee = currentUser() AND labels = 'needs-tests' AND labels not in ('needs-planning') AND status != 'Done' ORDER BY priority DESC",
@@ -51,8 +51,8 @@
         "labels_exclude": ["needs-planning"],
         "description_condition": null
       },
-      "script": "ralph/afk-tester.sh",
-      "prompt": "ralph/prompt-tester.md"
+      "script": "bin/afk-tester",
+      "prompt": "prompts/tester.md"
     },
     "refactor": {
       "jql": "assignee = currentUser() AND labels = 'tech-debt' AND labels not in ('needs-planning') ORDER BY priority DESC",
@@ -62,8 +62,8 @@
         "labels_exclude": ["needs-planning"],
         "description_condition": null
       },
-      "script": "ralph/afk-refactor.sh",
-      "prompt": "ralph/prompt-refactor.md"
+      "script": "bin/afk-refactor",
+      "prompt": "prompts/refactor.md"
     },
     "documenter": {
       "jql": "assignee = currentUser() AND status = 'Done' AND labels not in ('documented', 'tech-debt') ORDER BY updated DESC",
@@ -73,8 +73,8 @@
         "labels_exclude": ["documented", "tech-debt"],
         "description_condition": null
       },
-      "script": "ralph/afk-documenter.sh",
-      "prompt": "ralph/prompt-documenter.md"
+      "script": "bin/afk-documenter",
+      "prompt": "prompts/documenter.md"
     }
   }
 }

@@ -1,8 +1,8 @@
 # RULES
 
 1. **ONE TASK** - Do one task, commit, stop.
-2. **COMMIT CHANGES** - If you modified files, you must commit. If you only updated JIRA, do not commit.
-3. **JIRA IS TRUTH** - JIRA is the source of truth for task status. Never modify local files for tracking.
+2. **COMMIT CHANGES** - If you modified files, you must commit. If you only updated the backlog, do not commit.
+3. **BACKLOG IS TRUTH** - The backlog is the source of truth for task status. Never modify local files for tracking.
 4. **NO SKIPPING** - Every task must be verified with evidence.
 
 ---
@@ -11,19 +11,19 @@
 
 ## 1. Load Context
 
-1. Find assigned planning tasks using `mcp__jira__searchJiraIssuesUsingJql`.
+1. Find assigned planning tasks using the backlog search tool.
    - **JQL**: `assignee = currentUser() AND ((description is EMPTY OR description ~ "TODO") OR labels = "needs-planning") AND status != "Done" ORDER BY createdDate DESC`
    - **IMPORTANT**: Set `maxResults=1` to avoid reading too much data.
 2. Read last 10 RALPH commits.
 
 ## 2. Pick A SINGLE Task
 
-From the JQL results (already sorted by priority):
+From the query results (already sorted by priority):
 
 1. Pick the first issue.
-2. If NO issues returned by JQL → `<promise>COMPLETE</promise>` (all assigned work is done).
+2. If NO issues returned by query → `<promise>COMPLETE</promise>` (all assigned work is done).
 
-Fetch the chosen issue's full details with `mcp__jira__getJiraIssue`.
+Fetch the chosen issue's full details using the backlog task detail tool.
 
 ## 3. Plan & Refine
 
@@ -40,9 +40,9 @@ Fetch the chosen issue's full details with `mcp__jira__getJiraIssue`.
     - Add comment: "@[User] I need clarification on X."
     - STOP.
 
-## 4. Update JIRA
+## 4. Update Backlog
 
-1.  **Update Description**: Use `mcp__jira__editJiraIssue` to set the new rich description.
+1.  **Update Description**: Use the backlog edit tool to set the new rich description.
 2.  **Remove Label**: If the ticket had `needs-planning`, remove it.
 3.  **Transition**:
     - If ready for work: Transition to **"To Do"**.
@@ -53,10 +53,10 @@ Fetch the chosen issue's full details with `mcp__jira__getJiraIssue`.
 If you modified any files (unlikely for Planner, but possible):
 
 ```
-RALPH_PLANNER: Planned <JIRA-KEY>
+RALPH_PLANNER: Planned <TASK-KEY>
 ```
 
-If you ONLY updated JIRA:
+If you ONLY updated the backlog:
 Output `<promise>COMPLETE</promise>` immediately.
 
 Output `<promise>COMPLETE</promise>` when the loop finishes one task.

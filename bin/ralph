@@ -1,0 +1,76 @@
+#!/bin/zsh
+set -e
+
+RALPH_HOME="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+source "$RALPH_HOME/lib/ralph-core.sh"
+ralph_init
+
+RALPH_VERSION="1.0.0"
+
+usage() {
+  cat <<EOF
+ralph — Autonomous agent ecosystem for backlog-driven SDLC
+
+Usage: ralph <command>
+
+Commands:
+  init      Create a .ralphrc file in the current directory
+  config    Show current configuration
+  version   Show version
+  help      Show this help message
+
+Agent commands (run directly):
+  afk-planner       Run the Planner agent loop
+  afk-implementer   Run the Implementer agent loop
+  afk-reviewer      Run the Reviewer agent loop
+  afk-tester        Run the Tester agent loop
+  afk-refactor      Run the Refactorer agent loop
+  afk-documenter    Run the Documenter agent loop
+  afk-claude <N>    Run N iterations with generic prompt
+  afk-claude-gated  Run generic gated loop
+  once-claude       Single-run Claude session
+EOF
+}
+
+cmd_init() {
+  if [[ -f ".ralphrc" ]]; then
+    echo ".ralphrc already exists in this directory."
+    exit 1
+  fi
+  cp "$RALPH_HOME/.ralphrc.example" ".ralphrc"
+  echo "Created .ralphrc — edit it with your provider credentials."
+}
+
+cmd_config() {
+  echo "RALPH_HOME:     $RALPH_HOME"
+  echo "RALPH_PROVIDER: $RALPH_PROVIDER"
+  echo "RALPH_VERSION:  $RALPH_VERSION"
+  echo ""
+  echo "Provider:       $RALPH_HOME/lib/providers/$RALPH_PROVIDER.sh"
+  echo "Instructions:   $RALPH_HOME/providers/$RALPH_PROVIDER/instructions.md"
+  echo "Routing:        $RALPH_HOME/providers/$RALPH_PROVIDER/routing.json"
+  echo "Prompts:        $RALPH_HOME/prompts/"
+  echo ""
+
+  if [[ -f ".ralphrc" ]]; then
+    echo "Local config:   $(pwd)/.ralphrc"
+  else
+    echo "Local config:   (none — run 'ralph init' to create .ralphrc)"
+  fi
+}
+
+cmd_version() {
+  echo "ralph $RALPH_VERSION"
+}
+
+case "${1:-}" in
+  init)       cmd_init ;;
+  config)     cmd_config ;;
+  version|-v) cmd_version ;;
+  help|--help|-h|"") usage ;;
+  *)
+    echo "Unknown command: $1"
+    echo "Run 'ralph help' for usage."
+    exit 1
+    ;;
+esac

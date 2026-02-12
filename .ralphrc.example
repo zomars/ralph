@@ -1,0 +1,10 @@
+# Backlog provider (jira, github, linear)
+export RALPH_PROVIDER="jira"
+
+# Jira-specific (when RALPH_PROVIDER=jira)
+export JIRA_EMAIL="you@example.com"
+export JIRA_API_TOKEN="your-api-token"
+export JIRA_BASE_URL="https://yourorg.atlassian.net"
+
+# Polling interval in seconds (default: 300)
+export RALPH_POLL_INTERVAL=300

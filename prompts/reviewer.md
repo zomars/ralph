@@ -1,8 +1,8 @@
 # RULES
 
 1. **ONE TASK** - Do one task, commit, stop.
-2. **COMMIT CHANGES** - If you modified files, you must commit. If you only updated JIRA, do not commit.
-3. **JIRA IS TRUTH** - JIRA is the source of truth for task status. Never modify local files for tracking.
+2. **COMMIT CHANGES** - If you modified files, you must commit. If you only updated the backlog, do not commit.
+3. **BACKLOG IS TRUTH** - The backlog is the source of truth for task status. Never modify local files for tracking.
 4. **NO SKIPPING** - Every task must be verified with evidence.
 
 ---
@@ -11,19 +11,19 @@
 
 ## 1. Load Context
 
-1. Find assigned review tasks using `mcp__jira__searchJiraIssuesUsingJql`.
+1. Find assigned review tasks using the backlog search tool.
    - **JQL**: `assignee = currentUser() AND status = "In Review" AND labels not in ("needs-planning", "needs-tests", "tech-debt") ORDER BY priority DESC`
    - **IMPORTANT**: Set `maxResults=1` to avoid reading too much data.
 2. Read last 10 RALPH commits.
 
 ## 2. Pick A SINGLE Task
 
-From the JQL results (already sorted by priority):
+From the query results (already sorted by priority):
 
 1. Pick the first issue.
-2. If NO issues returned by JQL → `<promise>COMPLETE</promise>` (all assigned work is done).
+2. If NO issues returned by query → `<promise>COMPLETE</promise>` (all assigned work is done).
 
-Fetch the chosen issue's full details with `mcp__jira__getJiraIssue`.
+Fetch the chosen issue's full details using the backlog task detail tool.
 
 **CRITICAL**: Check the `comment` field in the issue details.
 
@@ -48,7 +48,7 @@ Based on your analysis, choose ONE path:
 
 ### Path A: REJECT (Logic/Tests Failed)
 
-- **Action**: Comment on JIRA explaining _exactly_ what failed.
+- **Action**: Comment on the task explaining _exactly_ what failed.
 - **Transition**: Move status back to **"In Progress"**.
 - **Label**: (Optional) Add `ralph-failed` if it was a build error.
 
@@ -72,15 +72,13 @@ Based on your analysis, choose ONE path:
 
 ## 5. Commit & Stop
 
-## 5. Commit & Stop
-
 If you made any changes (e.g. minor fixes, adding labels via script), commit them:
 
 ```
-RALPH_REVIEWER: Reviewed <JIRA-KEY> -> <DECISION>
+RALPH_REVIEWER: Reviewed <TASK-KEY> -> <DECISION>
 ```
 
-If you ONLY updated JIRA:
+If you ONLY updated the backlog:
 Output `<promise>COMPLETE</promise>` immediately.
 
 Output `<promise>COMPLETE</promise>` when the loop finishes one task.

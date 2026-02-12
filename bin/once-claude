@@ -1,0 +1,18 @@
+#!/bin/zsh
+set -e
+RALPH_HOME="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+source "$RALPH_HOME/lib/ralph-core.sh"
+ralph_init
+
+provider_instructions="$(ralph_get_provider_instructions)"
+prompt_file="${1:-$RALPH_HOME/prompts/generic.md}"
+
+if [[ ! -f "$provider_instructions" ]]; then
+  ralph_error "Provider instructions not found: $provider_instructions"
+  exit 1
+fi
+
+claude \
+  --permission-mode acceptEdits \
+  --append-system-prompt "$(cat "$provider_instructions")" \
+  "$prompt_file"

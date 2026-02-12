@@ -1,0 +1,5 @@
+#!/bin/zsh
+set -e
+RALPH_HOME="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+source "$RALPH_HOME/lib/ralph-gated-loop.sh"
+ralph_gated_loop "documenter" "Documenter"

@@ -2,7 +2,7 @@
 
 1. **ONE TASK** - Do one task, commit, stop.
 2. **MUST COMMIT** - Every iteration ends with a git commit. No exceptions.
-3. **JIRA IS TRUTH** - JIRA is the source of truth for task status. Never modify local files for tracking.
+3. **BACKLOG IS TRUTH** - The backlog is the source of truth for task status. Never modify local files for tracking.
 4. **NO SKIPPING** - Every task must be verified with evidence.
 
 ---
@@ -18,12 +18,12 @@
 
 ## 2. Pick A SINGLE Task
 
-From the JQL results (already sorted by priority):
+From the query results (already sorted by priority):
 
 1. Pick the first issue.
-2. If NO issues returned by JQL → `<promise>COMPLETE</promise>` (all assigned work is done).
+2. If NO issues returned by query → `<promise>COMPLETE</promise>` (all assigned work is done).
 
-Fetch the chosen issue's full details with `mcp__jira__getJiraIssue`.
+Fetch the chosen issue's full details using the backlog task detail tool.
 
 ## 3. Document
 
@@ -38,7 +38,7 @@ Fetch the chosen issue's full details with `mcp__jira__getJiraIssue`.
     - **Complex Logic?** Add JSDoc/Comments if missing.
 4.  **Verify**: Ensure markdown is valid.
 
-## 4. Update JIRA
+## 4. Update Backlog
 
 1.  **Add Label**: Add `documented`.
 2.  **Comment**: "Updated documentation for [Feature]."
@@ -47,7 +47,7 @@ Fetch the chosen issue's full details with `mcp__jira__getJiraIssue`.
 ## 5. Commit & Stop
 
 ```
-RALPH_DOCS: Updated docs for <JIRA-KEY>
+RALPH_DOCS: Updated docs for <TASK-KEY>
 ```
 
 Output `<promise>COMPLETE</promise>` when the loop finishes one task.

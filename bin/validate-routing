@@ -5,12 +5,19 @@ set -eo pipefail
 # Validates routing.json for overlaps, gaps, and drift from prompt files.
 #
 # Usage:
-#   ./ralph/validate-routing.sh              # Default: simulate ticket states, report overlaps/gaps
-#   ./ralph/validate-routing.sh --matrix     # Full matrix output
-#   ./ralph/validate-routing.sh --check-prompts  # Check JQL drift between routing.json and prompt files
+#   validate-routing              # Default: simulate ticket states, report overlaps/gaps
+#   validate-routing --matrix     # Full matrix output
+#   validate-routing --check-prompts  # Check JQL drift between routing.json and prompt files
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROUTING_JSON="$SCRIPT_DIR/routing.json"
+RALPH_HOME="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+
+# Load provider from .ralphrc or default to jira
+if [[ -f ".ralphrc" ]]; then
+  source ".ralphrc"
+fi
+RALPH_PROVIDER="${RALPH_PROVIDER:-jira}"
+
+ROUTING_JSON="$RALPH_HOME/providers/$RALPH_PROVIDER/routing.json"
 
 if [ ! -f "$ROUTING_JSON" ]; then
   echo "ERROR: routing.json not found at $ROUTING_JSON"
@@ -24,30 +31,25 @@ fi
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
-# Get all agent keys
 get_agents() {
   jq -r '.agents | keys[]' "$ROUTING_JSON"
 }
 
-# Check if an agent matches a given ticket state
-# Args: agent_key, status, labels (comma-separated or "none"), description_state
 agent_matches() {
   local agent="$1"
   local status="$2"
-  local labels="$3"        # comma-separated list or "none"
-  local desc_state="$4"    # "empty", "todo", "filled"
+  local labels="$3"
+  local desc_state="$4"
 
   local rules
   rules=$(jq -c ".agents.${agent}.rules" "$ROUTING_JSON")
 
-  # Check status
   local status_match
   status_match=$(echo "$rules" | jq -r --arg s "$status" '.status_in | map(select(. == $s)) | length')
   if [ "$status_match" -eq 0 ]; then
     return 1
   fi
 
-  # Check labels_include (if set, at least one must be present)
   local labels_include
   labels_include=$(echo "$rules" | jq -r '.labels_include // empty')
   if [ -n "$labels_include" ]; then
@@ -64,7 +66,6 @@ agent_matches() {
     fi
   fi
 
-  # Check labels_exclude (if set, none may be present)
   local labels_exclude
   labels_exclude=$(echo "$rules" | jq -r '.labels_exclude // empty')
   if [ -n "$labels_exclude" ]; then
@@ -76,16 +77,13 @@ agent_matches() {
     done < <(echo "$rules" | jq -r '.labels_exclude[]')
   fi
 
-  # Check description_condition
   local desc_cond
   desc_cond=$(echo "$rules" | jq -r '.description_condition // "null"')
 
   case "$desc_cond" in
     "null"|"")
-      # No condition — matches any description state
       ;;
     "empty_or_todo_or_label_needs_planning")
-      # Matches if desc is empty, todo, OR ticket has needs-planning label
       local has_needs_planning=0
       if echo ",$labels," | grep -q ",needs-planning,"; then
         has_needs_planning=1
@@ -113,22 +111,16 @@ run_simulation() {
   local show_matrix="${1:-false}"
   local desc_states=("empty" "todo" "filled")
 
-  # Read statuses and labels into arrays (macOS-compatible)
   local statuses=()
   while IFS= read -r line; do statuses+=("$line"); done < <(jq -r '.statuses[]' "$ROUTING_JSON")
 
   local all_labels=()
   while IFS= read -r line; do all_labels+=("$line"); done < <(jq -r '.labels[]' "$ROUTING_JSON")
 
-  # Generate label combinations:
-  # - none (no labels)
-  # - each single label
-  # - a few realistic multi-label combos
   local label_combos=("none")
   for l in "${all_labels[@]}"; do
     label_combos+=("$l")
   done
-  # Add realistic multi-label combos
   label_combos+=("needs-tests,needs-planning")
   label_combos+=("tech-debt,needs-planning")
   label_combos+=("needs-tests,tech-debt")
@@ -191,7 +183,6 @@ run_simulation() {
           done
           printf " | %s\n" "$result"
         elif [ "$match_count" -ne 1 ]; then
-          # In default mode, only print problems
           printf "%-14s %-30s %-8s -> %s\n" "$status" "$labels" "$desc" "$result"
         fi
       done
@@ -234,30 +225,25 @@ check_prompts() {
     json_jql=$(jq -r ".agents.${agent}.jql" "$ROUTING_JSON")
     prompt_file=$(jq -r ".agents.${agent}.prompt" "$ROUTING_JSON")
 
-    local full_prompt_path="$SCRIPT_DIR/../$prompt_file"
+    local full_prompt_path="$RALPH_HOME/$prompt_file"
     if [ ! -f "$full_prompt_path" ]; then
       echo "WARNING: Prompt file not found: $prompt_file"
       exit_code=1
       continue
     fi
 
-    # Extract JQL from prompt markdown
-    # Pattern 1: **JQL**: `...` (on same line)
     local prompt_jql=""
     prompt_jql=$(sed -n 's/.*\*\*JQL\*\*: `\(.*\)`$/\1/p' "$full_prompt_path" 2>/dev/null | head -1 || true)
 
     if [ -z "$prompt_jql" ]; then
-      # Pattern 2: line after "**JQL**" header, indented with backticks
       prompt_jql=$(sed -n '/\*\*JQL\*\*/{n;p;}' "$full_prompt_path" 2>/dev/null | head -1 | sed 's/^[[:space:]]*//' | sed 's/`//g' || true)
     fi
 
     if [ -z "$prompt_jql" ]; then
-      # Pattern 3: "with JQL:" then backtick-wrapped JQL on next line
       prompt_jql=$(sed -n '/with JQL:/{n;p;}' "$full_prompt_path" 2>/dev/null | head -1 | sed 's/^[[:space:]]*//' | sed 's/`//g' || true)
     fi
 
     if [ -z "$prompt_jql" ]; then
-      # Pattern 4: any backtick-wrapped line containing "assignee = currentUser()"
       prompt_jql=$(grep 'assignee = currentUser()' "$full_prompt_path" 2>/dev/null | grep '`' | head -1 | sed 's/^[[:space:]]*//' | sed 's/`//g' || true)
     fi
 
@@ -267,7 +253,6 @@ check_prompts() {
       continue
     fi
 
-    # Normalize: replace single quotes with double quotes for comparison
     local norm_json
     local norm_prompt
     norm_json=$(echo "$json_jql" | sed "s/'/\"/g")
@@ -304,7 +289,7 @@ case "${1:-}" in
     check_prompts
     ;;
   --help|-h)
-    echo "Usage: $0 [--matrix | --check-prompts]"
+    echo "Usage: validate-routing [--matrix | --check-prompts]"
     echo ""
     echo "  (default)        Simulate ticket states, report overlaps and gaps"
     echo "  --matrix         Full matrix output showing all agents vs all states"
@@ -316,7 +301,7 @@ case "${1:-}" in
     ;;
   *)
     echo "Unknown option: $1"
-    echo "Usage: $0 [--matrix | --check-prompts]"
+    echo "Usage: validate-routing [--matrix | --check-prompts]"
     exit 1
     ;;
 esac

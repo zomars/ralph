@@ -1,0 +1,19 @@
+{
+  "name": "ralph",
+  "version": "1.0.0",
+  "description": "Autonomous agent ecosystem for backlog-driven SDLC",
+  "bin": {
+    "afk-planner": "./bin/afk-planner",
+    "afk-implementer": "./bin/afk-implementer",
+    "afk-reviewer": "./bin/afk-reviewer",
+    "afk-tester": "./bin/afk-tester",
+    "afk-refactor": "./bin/afk-refactor",
+    "afk-documenter": "./bin/afk-documenter",
+    "afk-claude": "./bin/afk-claude",
+    "afk-claude-gated": "./bin/afk-claude-gated",
+    "once-claude": "./bin/once-claude",
+    "validate-routing": "./bin/validate-routing",
+    "ralph": "./bin/ralph"
+  },
+  "license": "MIT"
+}

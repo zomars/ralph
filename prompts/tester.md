@@ -2,7 +2,7 @@
 
 1. **ONE TASK** - Do one task, commit, stop.
 2. **MUST COMMIT** - Every iteration ends with a git commit. No exceptions.
-3. **JIRA IS TRUTH** - JIRA is the source of truth for task status. Never modify local files for tracking.
+3. **BACKLOG IS TRUTH** - The backlog is the source of truth for task status. Never modify local files for tracking.
 4. **NO SKIPPING** - Every task must be verified with evidence.
 
 ---
@@ -11,19 +11,19 @@
 
 ## 1. Load Context
 
-1. Find assigned test tasks using `mcp__jira__searchJiraIssuesUsingJql`.
+1. Find assigned test tasks using the backlog search tool.
    - **JQL**: `assignee = currentUser() AND labels = "needs-tests" AND labels not in ("needs-planning") AND status != "Done" ORDER BY priority DESC`
    - **IMPORTANT**: Set `maxResults=1` to avoid reading too much data.
 2. Read last 10 RALPH commits.
 
 ## 2. Pick A SINGLE Task
 
-From the JQL results (already sorted by priority):
+From the query results (already sorted by priority):
 
 1. Pick the first issue.
-2. If NO issues returned by JQL → `<promise>COMPLETE</promise>` (all assigned work is done).
+2. If NO issues returned by query → `<promise>COMPLETE</promise>` (all assigned work is done).
 
-Fetch the chosen issue's full details with `mcp__jira__getJiraIssue`.
+Fetch the chosen issue's full details using the backlog task detail tool.
 
 ## 3. Implement Tests
 
@@ -38,7 +38,7 @@ Fetch the chosen issue's full details with `mcp__jira__getJiraIssue`.
     - Cover happy paths and edge cases.
 5.  **Verify**: Run `npm run test` (or equivalent) to ensure they pass.
 
-## 4. Update JIRA
+## 4. Update Backlog
 
 1.  **Remove Label**: Remove `needs-tests`.
 2.  **Comment**: "Added tests for [File/Feature]. Coverage improved."
@@ -48,7 +48,7 @@ Fetch the chosen issue's full details with `mcp__jira__getJiraIssue`.
 ## 5. Commit & Stop
 
 ```
-RALPH_TESTER: Added tests for <JIRA-KEY>
+RALPH_TESTER: Added tests for <TASK-KEY>
 ```
 
 Output `<promise>COMPLETE</promise>` when the loop finishes one task.
