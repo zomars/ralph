@@ -1,0 +1,80 @@
+{
+  "statuses": ["To Do", "In Progress", "In Review", "Done"],
+  "labels": [
+    "needs-planning",
+    "needs-tests",
+    "tech-debt",
+    "ralph-blocked",
+    "ralph-failed",
+    "needs-input",
+    "documented"
+  ],
+  "agents": {
+    "planner": {
+      "jql": "assignee = currentUser() AND ((description is EMPTY OR description ~ 'TODO') OR labels = 'needs-planning') AND status != 'Done' ORDER BY createdDate DESC",
+      "rules": {
+        "status_in": ["To Do", "In Progress", "In Review"],
+        "labels_include": null,
+        "labels_exclude": null,
+        "description_condition": "empty_or_todo_or_label_needs_planning"
+      },
+      "script": "ralph/afk-planner.sh",
+      "prompt": "ralph/prompt-planner.md"
+    },
+    "implementer": {
+      "jql": "assignee = currentUser() AND status in ('To Do', 'In Progress') AND (description is not EMPTY AND description !~ 'TODO') AND labels not in ('needs-tests', 'tech-debt', 'ralph-blocked', 'needs-planning') ORDER BY priority DESC",
+      "rules": {
+        "status_in": ["To Do", "In Progress"],
+        "labels_include": null,
+        "labels_exclude": ["needs-tests", "tech-debt", "ralph-blocked", "needs-planning"],
+        "description_condition": "not_empty_and_not_todo"
+      },
+      "script": "ralph/afk-implementer.sh",
+      "prompt": "ralph/prompt-implementer.md"
+    },
+    "reviewer": {
+      "jql": "assignee = currentUser() AND status = 'In Review' AND labels not in ('needs-planning', 'needs-tests', 'tech-debt') ORDER BY priority DESC",
+      "rules": {
+        "status_in": ["In Review"],
+        "labels_include": null,
+        "labels_exclude": ["needs-planning", "needs-tests", "tech-debt"],
+        "description_condition": null
+      },
+      "script": "ralph/afk-reviewer.sh",
+      "prompt": "ralph/prompt-reviewer.md"
+    },
+    "tester": {
+      "jql": "assignee = currentUser() AND labels = 'needs-tests' AND labels not in ('needs-planning') AND status != 'Done' ORDER BY priority DESC",
+      "rules": {
+        "status_in": ["To Do", "In Progress", "In Review"],
+        "labels_include": ["needs-tests"],
+        "labels_exclude": ["needs-planning"],
+        "description_condition": null
+      },
+      "script": "ralph/afk-tester.sh",
+      "prompt": "ralph/prompt-tester.md"
+    },
+    "refactor": {
+      "jql": "assignee = currentUser() AND labels = 'tech-debt' AND labels not in ('needs-planning') ORDER BY priority DESC",
+      "rules": {
+        "status_in": ["To Do", "In Progress", "In Review", "Done"],
+        "labels_include": ["tech-debt"],
+        "labels_exclude": ["needs-planning"],
+        "description_condition": null
+      },
+      "script": "ralph/afk-refactor.sh",
+      "prompt": "ralph/prompt-refactor.md"
+    },
+    "documenter": {
+      "jql": "assignee = currentUser() AND status = 'Done' AND labels not in ('documented', 'tech-debt') ORDER BY updated DESC",
+      "rules": {
+        "status_in": ["Done"],
+        "labels_include": null,
+        "labels_exclude": ["documented", "tech-debt"],
+        "description_condition": null
+      },
+      "script": "ralph/afk-documenter.sh",
+      "prompt": "ralph/prompt-documenter.md"
+    }
+  }
+}
