@@ -34,7 +34,7 @@ export RALPH_PROVIDER="jira"
 export JIRA_EMAIL="you@example.com"
 export JIRA_API_TOKEN="your-token"
 export JIRA_BASE_URL="https://yourorg.atlassian.net"
-export RALPH_POLL_INTERVAL=300
+export RALPH_POLL_INTERVAL=5
 ```
 
 Alternatively, set these as environment variables in your shell profile.

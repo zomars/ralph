@@ -83,5 +83,5 @@ ralph_get_jql() {
 # ─── Config ───────────────────────────────────────────────────────────────────
 
 ralph_get_poll_interval() {
-  echo "${RALPH_POLL_INTERVAL:-300}"
+  echo "${RALPH_POLL_INTERVAL:-5}"
 }
