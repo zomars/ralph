@@ -12,7 +12,7 @@
 ## 1. Load Context
 
 1. Find assigned review tasks using the backlog search tool.
-   - **JQL**: `assignee = currentUser() AND status = "In Review" AND labels not in ("needs-planning", "needs-tests", "tech-debt") ORDER BY priority DESC`
+   - **JQL**: `assignee = currentUser() AND status = "In Review" AND labels not in ("needs-planning", "needs-tests", "tech-debt", "needs-input") ORDER BY priority DESC`
    - **IMPORTANT**: Set `maxResults=1` to avoid reading too much data.
 2. Read last 10 RALPH commits.
 
