@@ -84,7 +84,23 @@ ralph_get_jql() {
 # ─── Config ───────────────────────────────────────────────────────────────────
 
 ralph_get_poll_interval() {
-  echo "${RALPH_POLL_INTERVAL:-5}"
+  echo "${RALPH_POLL_INTERVAL:-15}"
+}
+
+# ralph_cooldown <seconds> <title_prefix>
+# Counts down in the titlebar, sleeping 1s at a time.
+# Respects $shutdown and $child_pid for clean signal handling.
+ralph_cooldown() {
+  local remaining="$1" prefix="$2"
+  while (( remaining > 0 )); do
+    ralph_titlebar_update "$prefix | Next poll: ${remaining}s"
+    sleep 1 &
+    child_pid=$!
+    wait $child_pid 2>/dev/null || true
+    child_pid=""
+    [[ $shutdown -eq 1 ]] && return 1
+    remaining=$((remaining - 1))
+  done
 }
 
 # ─── Title Bar ───────────────────────────────────────────────────────────────

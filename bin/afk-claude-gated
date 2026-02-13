@@ -53,13 +53,8 @@ while true; do
   task_count=$(provider_check_tasks "$RALPH_CUSTOM_QUERY")
 
   if [[ "$task_count" -eq 0 ]]; then
-    ralph_titlebar_update "AFK | Waiting | No tasks | $(date '+%H:%M:%S')"
     ralph_log "No tasks assigned. Sleeping ${poll_interval}s..."
-    sleep "$poll_interval" &
-    child_pid=$!
-    wait $child_pid 2>/dev/null || true
-    child_pid=""
-    [[ $shutdown -eq 1 ]] && die
+    ralph_cooldown "$poll_interval" "AFK | Waiting" || die
     continue
   fi
 

@@ -90,13 +90,8 @@ ralph_gated_loop() {
     task_count=$(provider_check_tasks "$jql")
 
     if [[ "$task_count" -lt "$instance_num" ]]; then
-      ralph_titlebar_update "${(U)agent_name} #$instance_num | Waiting | Tasks: $task_count | $(date '+%H:%M:%S')"
       ralph_log "Not enough tasks for instance #$instance_num ($task_count available). Sleeping ${poll_interval}s..."
-      sleep "$poll_interval" &
-      child_pid=$!
-      wait $child_pid 2>/dev/null || true
-      child_pid=""
-      [[ $shutdown -eq 1 ]] && die
+      ralph_cooldown "$poll_interval" "${(U)agent_name} #$instance_num | Waiting" || die
       continue
     fi
 
@@ -135,10 +130,6 @@ $(cat "$provider_instructions")" \
     fi
 
     ralph_log "Iteration complete. Cooldown ${poll_interval}s..."
-    sleep "$poll_interval" &
-    child_pid=$!
-    wait $child_pid 2>/dev/null || true
-    child_pid=""
-    [[ $shutdown -eq 1 ]] && die
+    ralph_cooldown "$poll_interval" "${(U)agent_name} #$instance_num | Cooldown" || die
   done
 }
