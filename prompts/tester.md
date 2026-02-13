@@ -27,28 +27,45 @@ Fetch the chosen issue's full details using the backlog task detail tool.
 
 ## 3. Implement Tests
 
-**Goal**: Increase confidence by adding missing tests.
+**Before starting work**, transition the issue to "In Progress":
 
-1.  **Checkout**: Ensure you are on the correct branch/commit.
-2.  **Analyze**: Look at the code that needs testing.
-3.  **Check Feasibility**:
-    - **Untestable Code?** If the code is too coupled to test easily -> Add label `tech-debt`, remove `needs-tests`, transition status to **"To Do"**, and STOP. (Let Refactorer handle it).
-4.  **Write Tests**:
-    - Create new test files (e.g. `*.test.ts`, `*_spec.rb`).
-    - Cover happy paths and edge cases.
-5.  **Verify**: Run `npm run test` (or equivalent) to ensure they pass.
+1. Get available transitions for the task
+2. Transition to "In Progress"
+
+**Then write the tests. Follow these steps:**
+
+1. **Understand the requirement**: Read the issue description carefully. Identify exactly what code needs test coverage.
+2. **Explore the codebase**: Use `Glob` and `Grep` to find the source files that need testing. Read them. Understand the existing test setup, frameworks, and conventions (look for existing `*.test.ts`, `*.spec.ts` files).
+3. **Check Feasibility**: If the code is too coupled to test easily → Add label `tech-debt`, remove `needs-tests`, transition status to **"To Do"**, add a comment explaining why, and STOP.
+4. **Write the tests**: Create test files following existing naming conventions (e.g. `*.test.ts`). Cover happy paths and edge cases. Follow existing test patterns in the codebase.
+5. **Verify**: Run `npm run test` to ensure all tests pass. If blocked by a genuine blocker (build failures, missing dependencies, failing tests), output `<promise>ABORT</promise>`.
+
+**Ralph only works on existing issues assigned to the user.** It does NOT create new issues or subtasks.
 
 ## 4. Update Backlog
 
-1.  **Remove Label**: Remove `needs-tests`.
-2.  **Comment**: "Added tests for [File/Feature]. Coverage improved."
-3.  **Transition**: Hand it back to Review.
-    - Transition to **"In Review"**. (So Reviewer can verify your tests).
+After tests are written and passing:
+
+1. **Remove Label**: Remove `needs-tests`.
+2. **Add a comment** to the task:
+   - **Action**: Added tests
+   - **Commit**: SHA of the commit
+   - **Evidence**: Test output showing tests pass
+   - **Files changed**: List of test files created/modified
+3. **Transition**: Transition to **"In Review"** (so Reviewer can verify the tests).
+
+Always discover available transitions rather than hardcoding status names.
 
 ## 5. Commit & Stop
 
 ```
 RALPH_TESTER: Added tests for <TASK-KEY>
+
+Evidence: <brief description of tests added and verification>
 ```
 
-Output `<promise>COMPLETE</promise>` when the loop finishes one task.
+---
+
+# COMPLETE
+
+When the backlog search returns zero results for your query, output `<promise>COMPLETE</promise>` — all assigned work is done.
