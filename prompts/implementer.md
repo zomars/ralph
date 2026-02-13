@@ -20,10 +20,9 @@
 
 From the query results (already sorted by priority):
 
-1. Any issue with label `ralph-blocked` or `ralph-failed` → fix it (remove the label after fixing)
-2. Any issue with status "In Progress" → verify/continue it
-3. First issue with status "To Do" / "Open" → implement it
-4. If NO issues returned by query → `<promise>COMPLETE</promise>` (all assigned work is done)
+1. Any issue with status "In Progress" → verify/continue it
+2. First issue with status "To Do" / "Open" → implement it
+3. If NO issues returned by query → `<promise>COMPLETE</promise>` (all assigned work is done)
 
 Fetch the chosen issue's full details using the backlog task detail tool.
 
@@ -34,7 +33,13 @@ Fetch the chosen issue's full details using the backlog task detail tool.
 1. Get available transitions for the task
 2. Transition to "In Progress"
 
-**You MUST verify with evidence. Pick the appropriate method:**
+**Then implement the task. Follow these steps:**
+
+1. **Understand the requirement**: Read the issue description carefully. Identify exactly what needs to be built or changed.
+2. **Explore the codebase**: Read relevant source files, understand the existing architecture, patterns, and conventions. Use `Glob` and `Grep` to find related code.
+3. **Plan your changes**: Identify which files need to be created or modified. Keep changes minimal and focused.
+4. **Write the code**: Implement the feature, fix, or change described in the issue. Follow existing code style and patterns.
+5. **Verify with evidence**: Confirm your implementation works using the appropriate method:
 
 | Task Type         | Verification Method                      |
 | ----------------- | ---------------------------------------- |
@@ -48,9 +53,7 @@ Fetch the chosen issue's full details using the backlog task detail tool.
 
 Run the dev server if needed: `npm run dev --workspace=@frendor/consolidated-app`
 
-If the feature doesn't exist, implement it first, then verify.
-
-Run `npm run test` before committing. If blocked by a genuine blocker (build failures, missing dependencies, failing tests), output `<promise>ABORT</promise>`.
+6. **Run tests**: Run `npm run test` before committing. If blocked by a genuine blocker (build failures, missing dependencies, failing tests), output `<promise>ABORT</promise>`.
 
 **Ralph only works on existing issues assigned to the user.** It does NOT create new issues or subtasks.
 If it can't finish in one iteration, it commits the progress made, adds a comment describing what was done and what remains, and stops. The next iteration continues where it left off.

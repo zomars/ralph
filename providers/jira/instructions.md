@@ -28,6 +28,62 @@ Jira keys look like `PROJ-123`. Use this as `<TASK-KEY>` in commit messages.
 
 Jira uses JQL (Jira Query Language). All queries in the workflow prompts are written in JQL and can be passed directly to `mcp__jira__searchJiraIssuesUsingJql`.
 
+## Updating Descriptions (ADF Format)
+
+The Jira `description` field requires **Atlassian Document Format (ADF)**, not plain text or markdown.
+**Comments accept markdown**, but **descriptions do not**.
+
+Use only these ADF node types — anything else will be rejected:
+
+**Paragraphs:**
+```json
+{"type": "paragraph", "content": [{"type": "text", "text": "Your text here"}]}
+```
+
+**Bold/italic text:**
+```json
+{"type": "text", "text": "bold text", "marks": [{"type": "strong"}]}
+{"type": "text", "text": "italic text", "marks": [{"type": "em"}]}
+```
+
+**Headings (level 1-3):**
+```json
+{"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Section Title"}]}
+```
+
+**Bullet lists:**
+```json
+{"type": "bulletList", "content": [
+  {"type": "listItem", "content": [
+    {"type": "paragraph", "content": [{"type": "text", "text": "Item one"}]}
+  ]},
+  {"type": "listItem", "content": [
+    {"type": "paragraph", "content": [{"type": "text", "text": "Item two"}]}
+  ]}
+]}
+```
+
+**Full example — use this as a template:**
+```json
+{
+  "description": {
+    "type": "doc",
+    "version": 1,
+    "content": [
+      {"type": "heading", "attrs": {"level": 3}, "content": [{"type": "text", "text": "User Story"}]},
+      {"type": "paragraph", "content": [{"type": "text", "text": "As a user, I want X so that Y."}]},
+      {"type": "heading", "attrs": {"level": 3}, "content": [{"type": "text", "text": "Acceptance Criteria"}]},
+      {"type": "bulletList", "content": [
+        {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Criterion one"}]}]},
+        {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Criterion two"}]}]}
+      ]}
+    ]
+  }
+}
+```
+
+**IMPORTANT**: Every `listItem` MUST contain a `paragraph` node — never put `text` nodes directly inside `listItem`. Never use `orderedList` — use `bulletList` only. If ADF fails on the first attempt, do NOT retry with different formats — post the content as a **comment** (which accepts markdown) and move on.
+
 ## Cloud ID
 
 When calling Jira tools, use the `cloudId` from your Jira configuration. Call `mcp__jira__getAccessibleAtlassianResources` if you need to discover it.

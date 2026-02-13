@@ -77,6 +77,7 @@ ralph_gated_loop() {
     claude \
       --verbose \
       --print \
+      --max-turns 100 \
       --output-format stream-json \
       --dangerously-skip-permissions \
       --append-system-prompt "$(cat "$provider_instructions")" \
