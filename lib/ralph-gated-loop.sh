@@ -69,9 +69,10 @@ ralph_gated_loop() {
   local shutdown=0
 
   trap 'shutdown=1' INT TERM
-  trap 'rm -f "$tmpfile" 2>/dev/null; rm -rf "$instance_slot" 2>/dev/null' EXIT
+  trap 'ralph_titlebar_cleanup; rm -f "$tmpfile" 2>/dev/null; rm -rf "$instance_slot" 2>/dev/null' EXIT
 
   die() {
+    ralph_titlebar_cleanup
     printf "\nShutting down.\n"
     rm -f "$tmpfile" 2>/dev/null
     tmpfile=""
@@ -80,6 +81,8 @@ ralph_gated_loop() {
     kill -9 0 2>/dev/null
     exit 1
   }
+
+  ralph_titlebar_init
 
   # ─── Main loop ──────────────────────────────────────────────────────────
   while true; do
@@ -99,6 +102,7 @@ ralph_gated_loop() {
     iteration=$((iteration + 1))
     tmpfile=$(mktemp)
 
+    ralph_titlebar_update "${(U)agent_name} #$instance_num | Iteration $iteration | Tasks: $task_count | $(date '+%H:%M:%S')"
     echo "------- ${(U)agent_name} #$instance_num ITERATION $iteration ($task_count tasks) --------"
 
     claude \

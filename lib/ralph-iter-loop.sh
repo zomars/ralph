@@ -29,12 +29,15 @@ ralph_iter_loop() {
   local final_result='select(.type == "result").result // empty'
 
   # ─── Iteration loop ────────────────────────────────────────────────────
+  ralph_titlebar_init
+  trap "ralph_titlebar_cleanup; rm -f \$tmpfile 2>/dev/null" EXIT
+
   local i
   for ((i=1; i<=iterations; i++)); do
     local tmpfile
     tmpfile=$(mktemp)
-    trap "rm -f $tmpfile" EXIT
 
+    ralph_titlebar_update "Iteration $i/$iterations | $(date '+%H:%M:%S')"
     echo "------- ITERATION $i --------"
 
     claude \

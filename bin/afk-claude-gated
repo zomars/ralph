@@ -35,9 +35,10 @@ child_pid=""
 shutdown=0
 
 trap 'shutdown=1' INT TERM
-trap 'rm -f "$tmpfile" 2>/dev/null' EXIT
+trap 'ralph_titlebar_cleanup; rm -f "$tmpfile" 2>/dev/null' EXIT
 
 die() {
+  ralph_titlebar_cleanup
   printf "\nShutting down.\n"
   rm -f "$tmpfile" 2>/dev/null
   tmpfile=""
@@ -45,6 +46,8 @@ die() {
   kill -9 0 2>/dev/null
   exit 1
 }
+
+ralph_titlebar_init
 
 while true; do
   task_count=$(provider_check_tasks "$RALPH_CUSTOM_QUERY")
@@ -62,6 +65,7 @@ while true; do
   iteration=$((iteration + 1))
   tmpfile=$(mktemp)
 
+  ralph_titlebar_update "Iteration $iteration | Tasks: $task_count | $(date '+%H:%M:%S')"
   echo "------- ITERATION $iteration ($task_count tasks) --------"
 
   claude \
