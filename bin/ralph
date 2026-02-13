@@ -11,24 +11,26 @@ usage() {
   cat <<EOF
 ralph — Autonomous agent ecosystem for backlog-driven SDLC
 
-Usage: ralph <command>
+Usage: ralph <command> [options]
 
-Commands:
-  init      Create a .ralphrc file in the current directory
-  config    Show current configuration
-  version   Show version
-  help      Show this help message
+Agent commands:
+  planner           Run the Planner agent (AFK loop by default)
+  implementer       Run the Implementer agent
+  reviewer          Run the Reviewer agent
+  tester            Run the Tester agent
+  refactor          Run the Refactorer agent
+  documenter        Run the Documenter agent
 
-Agent commands (run directly):
-  afk-planner       Run the Planner agent loop
-  afk-implementer   Run the Implementer agent loop
-  afk-reviewer      Run the Reviewer agent loop
-  afk-tester        Run the Tester agent loop
-  afk-refactor      Run the Refactorer agent loop
-  afk-documenter    Run the Documenter agent loop
-  afk-claude <N>    Run N iterations with generic prompt
-  afk-claude-gated  Run generic gated loop
-  once-claude       Single-run Claude session
+Agent options:
+  --once            Run a single iteration, then exit
+  --afk             Run in AFK loop mode (default)
+
+Utility commands:
+  validate          Run routing validation (accepts --matrix, --check-prompts, --check-loops, --check-all)
+  init              Create a .ralphrc file in the current directory
+  config            Show current configuration
+  version           Show version
+  help              Show this help message
 EOF
 }
 
@@ -63,13 +65,60 @@ cmd_version() {
   echo "ralph $RALPH_VERSION"
 }
 
-case "${1:-}" in
-  init)       cmd_init ;;
-  config)     cmd_config ;;
-  version|-v) cmd_version ;;
-  help|--help|-h|"") usage ;;
+# Agent key → display name mapping
+agent_display_name() {
+  case "$1" in
+    planner)      echo "Planner" ;;
+    implementer)  echo "Implementer" ;;
+    reviewer)     echo "Reviewer" ;;
+    tester)       echo "Tester" ;;
+    refactor)     echo "Refactorer" ;;
+    documenter)   echo "Documenter" ;;
+  esac
+}
+
+cmd_agent() {
+  local agent_key="$1"
+  shift
+  local agent_name
+  agent_name=$(agent_display_name "$agent_key")
+
+  # Parse --once / --afk
+  local run_once="false"
+  for arg in "$@"; do
+    case "$arg" in
+      --once) run_once="true" ;;
+      --afk)  run_once="false" ;;
+      *)
+        echo "Unknown option for '$agent_key': $arg"
+        echo "Usage: ralph $agent_key [--once|--afk]"
+        exit 1
+        ;;
+    esac
+  done
+
+  source "$RALPH_HOME/lib/ralph-gated-loop.sh"
+
+  if [[ "$run_once" == "true" ]]; then
+    ralph_gated_loop_once "$agent_key" "$agent_name"
+  else
+    ralph_gated_loop "$agent_key" "$agent_name"
+  fi
+}
+
+subcmd="${1:-}"
+[[ -n "$subcmd" ]] && shift
+
+case "$subcmd" in
+  init)               cmd_init ;;
+  config)             cmd_config ;;
+  version|-v)         cmd_version ;;
+  help|--help|-h|"")  usage ;;
+  validate)           exec "$RALPH_HOME/bin/validate-routing-impl" "$@" ;;
+  planner|implementer|reviewer|tester|refactor|documenter)
+                      cmd_agent "$subcmd" "$@" ;;
   *)
-    echo "Unknown command: $1"
+    echo "Unknown command: $subcmd"
     echo "Run 'ralph help' for usage."
     exit 1
     ;;

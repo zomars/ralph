@@ -24,9 +24,14 @@ ralph_claim_instance() {
   done
 }
 
+ralph_gated_loop_once() {
+  ralph_gated_loop "$1" "$2" "true"
+}
+
 ralph_gated_loop() {
   local agent_key="$1"
   local agent_name="$2"
+  local run_once="${3:-false}"
 
   # ─── Init ─────────────────────────────────────────────────────────────────
   source "$RALPH_HOME/lib/ralph-core.sh"
@@ -90,6 +95,10 @@ ralph_gated_loop() {
     task_count=$(provider_check_tasks "$jql")
 
     if [[ "$task_count" -lt "$instance_num" ]]; then
+      if [[ "$run_once" == "true" ]]; then
+        ralph_log "No tasks for instance #$instance_num ($task_count available). Exiting (--once mode)."
+        exit 0
+      fi
       ralph_log "Not enough tasks for instance #$instance_num ($task_count available). Sleeping ${poll_interval}s..."
       ralph_cooldown "$poll_interval" "${(U)agent_name} #$instance_num | Waiting" || die
       continue
@@ -127,6 +136,11 @@ $(cat "$provider_instructions")" \
     if [[ "$result" == *"<promise>ABORT</promise>"* ]]; then
       echo "Ralph ($agent_name) aborted at iteration $iteration."
       exit 1
+    fi
+
+    if [[ "$run_once" == "true" ]]; then
+      ralph_log "Iteration complete. Exiting (--once mode)."
+      exit 0
     fi
 
     ralph_log "Iteration complete. Cooldown ${poll_interval}s..."
