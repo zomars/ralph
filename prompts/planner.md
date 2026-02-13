@@ -42,7 +42,7 @@ Fetch the chosen issue's full details using the backlog task detail tool.
 
 ## 4. Update Backlog
 
-1.  **Update Description**: Use the backlog edit tool to set the new rich description.
+1.  **Update Description**: Use the backlog edit tool to set the new rich description. The plan MUST go in the description field — never in a comment. Comments are only for mentioning what changed or requesting clarification.
 2.  **Remove Label**: If the ticket had `needs-planning`, remove it.
 3.  **Transition**:
     - If ready for work: Transition to **"To Do"**.

@@ -82,7 +82,7 @@ Use only these ADF node types — anything else will be rejected:
 }
 ```
 
-**IMPORTANT**: Every `listItem` MUST contain a `paragraph` node — never put `text` nodes directly inside `listItem`. Never use `orderedList` — use `bulletList` only. If ADF fails on the first attempt, do NOT retry with different formats — post the content as a **comment** (which accepts markdown) and move on.
+**IMPORTANT**: Every `listItem` MUST contain a `paragraph` node — never put `text` nodes directly inside `listItem`. Never use `orderedList` — use `bulletList` only. If ADF fails on the first attempt, simplify the ADF structure (use only paragraphs and bullet lists) and retry once. The plan MUST go in the description field — never post it as a comment.
 
 ## Cloud ID
 
