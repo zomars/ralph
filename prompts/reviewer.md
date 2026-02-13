@@ -32,7 +32,7 @@ Fetch the chosen issue's full details using the backlog task detail tool.
 
 ## 3. Review the Task
 
-**Goal**: Verify the implementation is correct, clean, and tested.
+**Goal**: Verify the implementation is correct, clean, and has been properly tested with evidence.
 
 1.  **Checkout**: Ensure you are on the correct branch/commit for this issue.
 2.  **Run Tests**: Execute `npm run test` (or equivalent).
@@ -41,6 +41,9 @@ Fetch the chosen issue's full details using the backlog task detail tool.
     - **Logic Check**: Is the implementation correct based on the ticket description?
     - **Code Quality**: Is the code clean? Any obvious bad patterns?
     - **Test Coverage**: Are there new tests for the new feature?
+4.  **Verify Testing Evidence**: Read the issue comments looking for a **test report from the Tester agent**.
+    - A valid test report MUST include: numbered test steps, screenshots as evidence, and a PASS/FAIL result.
+    - If no test report exists, or the report lacks screenshots/evidence, the task is NOT ready for approval — route to Path B.
 
 ## 4. Decide & Transition
 
@@ -52,9 +55,9 @@ Based on your analysis, choose ONE path:
 - **Transition**: Move status back to **"In Progress"**.
 - **Label**: (Optional) Add `ralph-failed` if it was a build error.
 
-### Path B: MISSING TESTS (Logic Good, Tests Missing)
+### Path B: NEEDS TESTING (No Evidence of Browser Testing)
 
-- **Action**: Comment "Logic looks good, but missing tests."
+- **Action**: Comment explaining what's missing (e.g. "Code looks good but needs browser testing with evidence" or "Test report lacks screenshots").
 - **Label**: Add `needs-tests`.
 - **Transition**: Move status to **"To Do"**. (This hands off to the Tester Agent).
 
@@ -67,7 +70,8 @@ Based on your analysis, choose ONE path:
 
 ### Path D: APPROVE (Good to Go)
 
-- **Action**: Comment "Verified. Tests passed. Code looks good."
+- **Precondition**: Tests pass, code is clean, AND a test report with screenshots exists in comments.
+- **Action**: Comment "Verified. Tests passed. Browser testing evidence confirmed. Code looks good."
 - **Transition**: Move status to **"Done"**.
 
 ## 5. Commit & Stop
