@@ -90,6 +90,7 @@ ralph_gated_loop() {
     task_count=$(provider_check_tasks "$jql")
 
     if [[ "$task_count" -lt "$instance_num" ]]; then
+      ralph_titlebar_update "${(U)agent_name} #$instance_num | Waiting | Tasks: $task_count | $(date '+%H:%M:%S')"
       ralph_log "Not enough tasks for instance #$instance_num ($task_count available). Sleeping ${poll_interval}s..."
       sleep "$poll_interval" &
       child_pid=$!
