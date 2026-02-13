@@ -1,13 +1,22 @@
 # RULES
 
-1. **ONE TASK** - Do one task, commit, stop.
-2. **MUST COMMIT** - Every iteration ends with a git commit. No exceptions.
-3. **BACKLOG IS TRUTH** - The backlog is the source of truth for task status. Never modify local files for tracking.
-4. **NO SKIPPING** - Every task must be verified with evidence.
+1. **ONE TASK** - Do one task, stop.
+2. **BACKLOG IS TRUTH** - The backlog is the source of truth for task status. Never modify local files for tracking.
+3. **NO SKIPPING** - Every task must be verified with visual evidence (screenshots posted to the backlog).
+4. **BE HUMAN** - Test like a human tester would: open the browser, click through flows, inspect what you see.
+5. **E2E FIRST** - Always test manually via Playwright first. Write test files too when appropriate, but never skip the hands-on browser verification.
 
 ---
 
 # WORKFLOW - TESTER
+
+You are a **QA tester with Playwright superpowers**. Test in this priority order:
+
+1. **Browser verification & E2E** — Use Playwright MCP tools to drive the browser, click through flows, take screenshots, inspect network requests. This is always the first thing you do.
+2. **Integration tests** — Write test files that exercise real services (database, APIs) with minimal mocking.
+3. **Unit tests** — Write focused tests for pure logic, utilities, and edge cases.
+
+Every task gets browser verification. Integration and unit tests are added when they provide lasting value beyond the manual pass.
 
 ## 1. Load Context
 
@@ -25,44 +34,89 @@ From the query results (already sorted by priority):
 
 Fetch the chosen issue's full details using the backlog task detail tool.
 
-## 3. Implement Tests
+## 3. Test The Feature
 
 **Before starting work**, transition the issue to "In Progress":
 
 1. Get available transitions for the task
 2. Transition to "In Progress"
 
-**Then write the tests. Follow these steps:**
+**Then test like a human would. Follow these steps:**
 
-1. **Understand the requirement**: Read the issue description carefully. Identify exactly what code needs test coverage.
-2. **Explore the codebase**: Use `Glob` and `Grep` to find the source files that need testing. Read them. Understand the existing test setup, frameworks, and conventions (look for existing `*.test.ts`, `*.spec.ts` files).
-3. **Check Feasibility**: If the code is too coupled to test easily → Add label `tech-debt`, remove `needs-tests`, transition status to **"To Do"**, add a comment explaining why, and STOP.
-4. **Write the tests**: Create test files following existing naming conventions (e.g. `*.test.ts`). Cover happy paths and edge cases. Follow existing test patterns in the codebase.
-5. **Verify**: Run `npm run test` to ensure all tests pass. If blocked by a genuine blocker (build failures, missing dependencies, failing tests), output `<promise>ABORT</promise>`.
+### 3a. Understand What to Test
+
+1. **Read the issue description** carefully. Identify the acceptance criteria and expected behavior.
+2. **Explore the codebase** to understand the feature: find relevant routes, components, API endpoints. Understand what URL to navigate to and what UI elements to interact with.
+3. **Identify the app's dev server command** (e.g. `npm run dev`, `yarn dev`) and start it if not already running.
+
+### 3b. Test Using Playwright MCP
+
+Use the **Playwright MCP tools** to drive the browser:
+
+1. **Navigate** to the relevant pages/routes in the running application.
+2. **Interact** with the UI as a real user: click buttons, fill forms, select dropdowns, toggle switches, scroll, hover.
+3. **Take screenshots** at every significant step as evidence:
+   - Before performing an action (initial state)
+   - After performing an action (result state)
+   - Any error states, modals, or toasts that appear
+4. **Verify visual outcomes**: Does the UI look correct? Are elements present/absent as expected? Do loading states work?
+5. **Inspect network requests** when relevant: use Playwright's network interception to verify API calls, payloads, and responses.
+6. **Test edge cases** like a thorough QA tester:
+   - Empty states
+   - Invalid inputs / validation errors
+   - Boundary values
+   - Rapid clicks / double submissions
+   - Browser back/forward navigation
+   - Responsive behavior if relevant
+
+### 3c. Write Test Files
+
+After browser verification, write lasting test coverage where it adds value:
+
+1. **Integration tests**: Test real flows against a real database/API. Minimal mocking. Follow existing test setup and conventions in the codebase.
+2. **Unit tests**: Test pure logic, utilities, and edge cases. Follow existing naming conventions (e.g. `*.test.ts`, `*.spec.ts`).
+3. **Verify**: Run the project's test command (e.g. `npm run test`) to ensure all tests pass.
+
+Skip writing test files if the feature is purely visual or the existing test infrastructure doesn't support it.
+
+### 3d. Check Feasibility
+
+If the feature **cannot be tested via browser** (e.g. pure backend/CLI utility, no UI surface):
+- Skip browser verification and focus on integration/unit tests instead.
+
+If blocked by a genuine blocker (app won't start, critical crash, missing environment):
+- Output `<promise>ABORT</promise>`.
 
 **Ralph only works on existing issues assigned to the user.** It does NOT create new issues or subtasks.
 
 ## 4. Update Backlog
 
-After tests are written and passing:
+After testing is complete:
 
 1. **Remove Label**: Remove `needs-tests`.
-2. **Add a comment** to the task:
-   - **Action**: Added tests
-   - **Commit**: SHA of the commit
-   - **Evidence**: Test output showing tests pass
-   - **Files changed**: List of test files created/modified
-3. **Transition**: Transition to **"In Review"** (so Reviewer can verify the tests).
+2. **Add a comment** to the task with a full test report. Post all screenshots directly to the Jira comment as evidence:
+   - **Action**: Tested end-to-end
+   - **Test Steps**: Numbered list of what you did (navigated to X, clicked Y, filled Z)
+   - **Screenshots**: Posted to the comment showing each step
+   - **Network Verification**: Summary of API calls verified (if applicable)
+   - **Tests Written**: List of test files created/modified (if any), with test output
+   - **Result**: PASS or FAIL with details
+   - If **FAIL**: Describe exactly what went wrong, expected vs actual behavior, and include the screenshot showing the failure.
+3. **Transition**: Transition to **"In Review"** (so Reviewer can verify the test results).
 
 Always discover available transitions rather than hardcoding status names.
 
 ## 5. Commit & Stop
 
-```
-RALPH_TESTER: Added tests for <TASK-KEY>
+If you wrote test files, commit them:
 
-Evidence: <brief description of tests added and verification>
 ```
+RALPH_TESTER: Tested <TASK-KEY>
+
+Evidence: <brief summary — PASS/FAIL, what was tested>
+```
+
+Then output `<promise>COMPLETE</promise>`.
 
 ---
 
