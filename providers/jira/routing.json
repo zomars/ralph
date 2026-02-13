@@ -25,7 +25,7 @@
     },
     "implementer": {
       "jql": "assignee = currentUser() AND status in ('To Do', 'In Progress') AND (description is not EMPTY AND description !~ 'TODO') AND (labels is EMPTY OR labels not in ('needs-tests', 'tech-debt', 'ralph-blocked', 'needs-planning', 'needs-input')) ORDER BY priority DESC",
-      "adds_labels": ["ralph-blocked", "ralph-failed"],
+      "adds_labels": ["ralph-blocked"],
       "rules": {
         "status_in": ["To Do", "In Progress"],
         "labels_include": null,

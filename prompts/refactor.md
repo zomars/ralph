@@ -27,6 +27,11 @@ Fetch the chosen issue's full details using the backlog task detail tool.
 
 ## 3. Refactor
 
+**Before starting work**, transition the issue to "In Progress":
+
+1. Get available transitions for the task
+2. Transition to "In Progress"
+
 **Goal**: Improve code quality without changing behavior.
 
 1.  **Checkout**: Ensure you are on the correct branch/commit.

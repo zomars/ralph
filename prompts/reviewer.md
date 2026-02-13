@@ -61,7 +61,7 @@ Based on your analysis, choose ONE path:
 ### Path C: MESSY CODE (Functional but Ugly)
 
 - **Action**: Comment "Functional, but needs refactoring."
-- **Label**: Add `tech-debt` (and potentially `needs-refactor`).
+- **Label**: Add `tech-debt`.
 - **Transition**: Move status to **"Done"**. (Refactorer will pick it up later).
   - _Note_: If it's really bad, use Path A instead.
 

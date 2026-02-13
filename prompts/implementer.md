@@ -21,7 +21,7 @@
 From the query results (already sorted by priority):
 
 1. Any issue with status "In Progress" → verify/continue it
-2. First issue with status "To Do" / "Open" → implement it
+2. First issue with status "To Do" → implement it
 3. If NO issues returned by query → `<promise>COMPLETE</promise>` (all assigned work is done)
 
 Fetch the chosen issue's full details using the backlog task detail tool.
@@ -69,9 +69,9 @@ After work is complete:
    - **Files changed**: List of modified files
 
 2. **Transition the issue**:
-   - Verified with evidence → transition to "Done"
+   - Verified with evidence → transition to "In Review"
    - Implemented, needs verification → keep "In Progress"
-   - Blocked/broken → add label `ralph-blocked` or `ralph-failed` + add comment explaining why
+   - Blocked/broken → add label `ralph-blocked` + add comment explaining why
 
 Always discover available transitions rather than hardcoding status names.
 
