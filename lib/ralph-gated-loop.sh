@@ -80,8 +80,10 @@ ralph_gated_loop() {
       --max-turns 100 \
       --output-format stream-json \
       --dangerously-skip-permissions \
-      --append-system-prompt "$(cat "$provider_instructions")" \
-      "@$prompt_file" \
+      --append-system-prompt "$(cat "$prompt_file")
+
+$(cat "$provider_instructions")" \
+      "You are RALPH_${(U)agent_key}. Execute your workflow now. Start with Step 1." \
     | grep --line-buffered '^{' \
     | tee "$tmpfile" \
     | jq --unbuffered -rj "$stream_text" &
