@@ -12,7 +12,7 @@
 ## 1. Load Context
 
 1. Find tasks that are "Done" but not yet documented.
-   - **JQL**: `assignee = currentUser() AND status = "Done" AND labels not in ("documented", "tech-debt", "needs-input") ORDER BY updated DESC`
+   - **JQL**: `assignee = currentUser() AND status = "Done" AND (labels is EMPTY OR labels not in ("documented", "tech-debt", "needs-input")) ORDER BY updated DESC`
    - **IMPORTANT**: Set `maxResults=1` to avoid reading too much data.
 2. Read last 10 RALPH commits.
 

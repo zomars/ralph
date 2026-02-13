@@ -12,7 +12,7 @@
 ## 1. Load Context
 
 1. Find assigned test tasks using the backlog search tool.
-   - **JQL**: `assignee = currentUser() AND labels = "needs-tests" AND labels not in ("needs-planning", "needs-input") AND status != "Done" ORDER BY priority DESC`
+   - **JQL**: `assignee = currentUser() AND labels = "needs-tests" AND (labels is EMPTY OR labels not in ("needs-planning", "needs-input")) AND status != "Done" ORDER BY priority DESC`
    - **IMPORTANT**: Set `maxResults=1` to avoid reading too much data.
 2. Read last 10 RALPH commits.
 

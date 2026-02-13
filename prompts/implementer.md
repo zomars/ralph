@@ -12,7 +12,7 @@
 ## 1. Load Context
 
 1. Find assigned tasks using the backlog search tool with query:
-   `assignee = currentUser() AND status in ("To Do", "In Progress") AND (description is not EMPTY AND description !~ "TODO") AND labels not in ("needs-tests", "tech-debt", "ralph-blocked", "needs-planning", "needs-input") ORDER BY priority DESC`
+   `assignee = currentUser() AND status in ("To Do", "In Progress") AND (description is not EMPTY AND description !~ "TODO") AND (labels is EMPTY OR labels not in ("needs-tests", "tech-debt", "ralph-blocked", "needs-planning", "needs-input")) ORDER BY priority DESC`
    **IMPORTANT**: Set `maxResults=1` to avoid reading too much data.
 2. Read last 10 RALPH commits.
 

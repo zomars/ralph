@@ -12,7 +12,7 @@
 ## 1. Load Context
 
 1. Find assigned refactoring tasks using the backlog search tool.
-   - **JQL**: `assignee = currentUser() AND labels = "tech-debt" AND labels not in ("needs-planning", "needs-input", "needs-tests") ORDER BY priority DESC`
+   - **JQL**: `assignee = currentUser() AND labels = "tech-debt" AND (labels is EMPTY OR labels not in ("needs-planning", "needs-input", "needs-tests")) ORDER BY priority DESC`
    - **IMPORTANT**: Set `maxResults=1` to avoid reading too much data.
 2. Read last 10 RALPH commits.
 

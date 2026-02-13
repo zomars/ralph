@@ -12,7 +12,7 @@
 ## 1. Load Context
 
 1. Find assigned planning tasks using the backlog search tool.
-   - **JQL**: `assignee = currentUser() AND ((description is EMPTY OR description ~ "TODO") OR labels = "needs-planning") AND labels not in ("needs-input", "needs-tests", "tech-debt", "ralph-blocked", "ralph-failed", "documented") AND status in ("To Do", "In Progress") ORDER BY createdDate DESC`
+   - **JQL**: `assignee = currentUser() AND ((description is EMPTY OR description ~ "TODO") OR labels = "needs-planning") AND (labels is EMPTY OR labels not in ("needs-input", "needs-tests", "tech-debt", "ralph-blocked", "ralph-failed", "documented")) AND status in ("To Do", "In Progress") ORDER BY createdDate DESC`
    - **IMPORTANT**: Set `maxResults=1` to avoid reading too much data.
 2. Read last 10 RALPH commits.
 
