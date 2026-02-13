@@ -17,7 +17,7 @@ provider_check_tasks() {
   response=$(curl -s --fail-with-body -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
     -H "Content-Type: application/json" \
     -X POST \
-    -d "{\"jql\":\"$query\",\"maxResults\":1,\"fields\":[\"summary\"]}" \
+    -d "{\"jql\":\"$query\",\"maxResults\":10,\"fields\":[\"summary\"]}" \
     "$JIRA_BASE_URL/rest/api/3/search/jql" 2>&1)
 
   if [[ $? -ne 0 ]]; then

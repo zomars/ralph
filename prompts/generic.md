@@ -13,16 +13,19 @@
 
 1. Find assigned tasks using the backlog search tool with the query from the BACKLOG PROVIDER section.
    Use the query: `assignee = currentUser() AND status != Done ORDER BY priority DESC, rank ASC`
+   **IMPORTANT**: Set `maxResults` to your instance number (from the user message, e.g. "instance 2" → `maxResults=2`). Default to `maxResults=1` if no instance number is given.
 2. Read last 10 RALPH commits.
 
 ## 2. Pick A SINGLE Task
 
 From the query results (already sorted by priority):
 
-1. Any issue with label `ralph-blocked` or `ralph-failed` → fix it (remove the label after fixing)
-2. Any issue with status "In Progress" → verify/continue it
-3. First issue with status "To Do" → implement it
-4. If NO issues returned by query → `<promise>COMPLETE</promise>` (all assigned work is done)
+1. If fewer results were returned than your instance number → `<promise>COMPLETE</promise>` (another instance is handling the remaining tasks)
+2. Pick the **last** result returned (e.g. instance 2 picks result #2, instance 1 picks result #1)
+3. Any issue with label `ralph-blocked` or `ralph-failed` → fix it (remove the label after fixing)
+4. Any issue with status "In Progress" → verify/continue it
+5. First issue with status "To Do" → implement it
+6. If NO issues returned by query → `<promise>COMPLETE</promise>` (all assigned work is done)
 
 Fetch the chosen issue's full details using the backlog task detail tool.
 
