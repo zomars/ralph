@@ -28,6 +28,12 @@ From the query results (already sorted by priority):
 
 Fetch the chosen issue's full details using the backlog task detail tool.
 
+**CRITICAL**: Check the `comment` field in the issue details.
+
+- If there are recent comments from reviewers or other agents, **READ THEM CAREFULLY**.
+- Comments may contain rejection feedback, change requests, or new instructions that override the original description.
+- If a reviewer sent the task back, address their feedback before doing anything else.
+
 ## 3. Do the Task
 
 **Before starting work**, transition the issue to "In Progress":
@@ -37,7 +43,7 @@ Fetch the chosen issue's full details using the backlog task detail tool.
 
 **Then implement the task. Follow these steps:**
 
-1. **Understand the requirement**: Read the issue description carefully. Identify exactly what needs to be built or changed.
+1. **Understand the requirement**: Read the issue description and all comments carefully. Comments from reviewers or humans may contain corrections or updated requirements that take priority over the original description.
 2. **Explore the codebase**: Read relevant source files, understand the existing architecture, patterns, and conventions. Use `Glob` and `Grep` to find related code.
 3. **Plan your changes**: Identify which files need to be created or modified. Keep changes minimal and focused.
 4. **Write the code**: Implement the feature, fix, or change described in the issue. Follow existing code style and patterns.
