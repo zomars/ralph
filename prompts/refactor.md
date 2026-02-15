@@ -25,6 +25,11 @@ From the query results (already sorted by priority):
 
 Fetch the chosen issue's full details using the backlog task detail tool.
 
+**CRITICAL**: Check the `comment` field in the issue details.
+
+- If there are recent comments from reviewers or other agents, **READ THEM CAREFULLY**.
+- Comments may contain specific guidance on what to refactor (e.g. "extract this into a helper", "simplify the nested conditionals in X").
+
 ## 3. Refactor
 
 **Before starting work**, transition the issue to "In Progress":

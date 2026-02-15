@@ -34,6 +34,12 @@ From the query results (already sorted by priority):
 
 Fetch the chosen issue's full details using the backlog task detail tool.
 
+**CRITICAL**: Check the `comment` field in the issue details.
+
+- If there are recent comments from reviewers or other agents, **READ THEM CAREFULLY**.
+- Comments may explain why the task was sent back (e.g. "test report lacks screenshots", "need to test edge case X").
+- Address the feedback in comments before doing anything else.
+
 ## 3. Test The Feature
 
 **Before starting work**, transition the issue to "In Progress":
@@ -45,7 +51,7 @@ Fetch the chosen issue's full details using the backlog task detail tool.
 
 ### 3a. Understand What to Test
 
-1. **Read the issue description** carefully. Identify the acceptance criteria and expected behavior.
+1. **Read the issue description and all comments** carefully. Comments from reviewers may specify what testing was missing or what to focus on. Identify the acceptance criteria and expected behavior.
 2. **Explore the codebase** to understand the feature: find relevant routes, components, API endpoints. Understand what URL to navigate to and what UI elements to interact with.
 3. **Identify the app's dev server command** (e.g. `npm run dev`, `yarn dev`) and start it if not already running.
 
