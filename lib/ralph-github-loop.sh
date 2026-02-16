@@ -97,6 +97,17 @@ ralph_github_loop() {
     exit 1
   }
 
+  # ─── Early exit for --once with no work (before titlebar clears screen) ─
+  if [[ "$run_once" == "true" ]]; then
+    local early_count
+    early_count=$(ralph_check_github_prs)
+    if [[ "$early_count" -lt "$instance_num" ]]; then
+      ralph_log "${agent_name} #$instance_num: No PRs needing fixes ($early_count found). Nothing to do."
+      rm -rf "$instance_slot" 2>/dev/null
+      exit 0
+    fi
+  fi
+
   ralph_titlebar_init
 
   # ─── Main loop ──────────────────────────────────────────────────────────
@@ -106,7 +117,7 @@ ralph_github_loop() {
 
     if [[ "$pr_count" -lt "$instance_num" ]]; then
       if [[ "$run_once" == "true" ]]; then
-        ralph_log "No PRs needing fixes for instance #$instance_num ($pr_count available). Exiting (--once mode)."
+        ralph_log "${agent_name} #$instance_num: No PRs needing fixes ($pr_count found). Nothing to do."
         exit 0
       fi
       ralph_log "Not enough PRs for instance #$instance_num ($pr_count available). Sleeping ${poll_interval}s..."

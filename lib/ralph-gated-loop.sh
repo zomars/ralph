@@ -87,6 +87,17 @@ ralph_gated_loop() {
     exit 1
   }
 
+  # ─── Early exit for --once with no work (before titlebar clears screen) ─
+  if [[ "$run_once" == "true" ]]; then
+    local early_count
+    early_count=$(provider_check_tasks "$jql")
+    if [[ "$early_count" -lt "$instance_num" ]]; then
+      ralph_log "${agent_name} #$instance_num: No tasks available ($early_count found). Nothing to do."
+      rm -rf "$instance_slot" 2>/dev/null
+      exit 0
+    fi
+  fi
+
   ralph_titlebar_init
 
   # ─── Main loop ──────────────────────────────────────────────────────────
@@ -96,7 +107,7 @@ ralph_gated_loop() {
 
     if [[ "$task_count" -lt "$instance_num" ]]; then
       if [[ "$run_once" == "true" ]]; then
-        ralph_log "No tasks for instance #$instance_num ($task_count available). Exiting (--once mode)."
+        ralph_log "${agent_name} #$instance_num: No tasks available ($task_count found). Nothing to do."
         exit 0
       fi
       ralph_log "Not enough tasks for instance #$instance_num ($task_count available). Sleeping ${poll_interval}s..."

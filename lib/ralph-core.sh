@@ -106,10 +106,12 @@ ralph_cooldown() {
 # ─── Title Bar ───────────────────────────────────────────────────────────────
 
 _ralph_titlebar_text=""
+_ralph_titlebar_active=0
 
 ralph_titlebar_init() {
   local rows
   rows=$(tput lines)
+  _ralph_titlebar_active=1
   # Clear screen, move to 1;1, set scroll region 2–bottom, position at line 2
   printf '\033[2J\033[1;1H\033[2K\033[2;%sr\033[2;1H' "$rows" >/dev/tty
   trap 'ralph_titlebar_resize' WINCH
@@ -140,7 +142,9 @@ ralph_titlebar_update() {
 }
 
 ralph_titlebar_cleanup() {
+  [[ $_ralph_titlebar_active -eq 0 ]] && return
   _ralph_titlebar_text=""
+  _ralph_titlebar_active=0
   # Reset scroll region to full screen, clear the title bar line
   printf '\033[r\033[1;1H\033[2K' >/dev/tty
 }
