@@ -6,12 +6,32 @@
 # It gates on GitHub PRs needing attention (changes requested / unresolved comments).
 
 ralph_check_github_prs() {
-  local cr commented
+  # GitHub search qualifiers miss bot reviews, so use GraphQL to count
+  # PRs with unresolved review threads (catches both human and bot feedback).
+  # Also count formal "changes requested" as a fallback.
+  # Scoped to the current repo via gh's default repo detection.
+  local cr unresolved repo
+  repo=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null) || repo=""
+  if [[ -z "$repo" ]]; then
+    echo 0
+    return
+  fi
   cr=$(gh pr list --author "@me" --search "review:changes_requested" \
     --json number --jq 'length' 2>/dev/null) || cr=0
-  commented=$(gh pr list --author "@me" --search "review:commented -review:approved" \
-    --json number --jq 'length' 2>/dev/null) || commented=0
-  echo $(( cr > commented ? cr : commented ))
+  unresolved=$(gh api graphql -f query="
+    {
+      search(query: \"is:pr is:open author:@me repo:$repo\", type: ISSUE, first: 50) {
+        nodes {
+          ... on PullRequest {
+            number
+            reviewThreads(first: 100) {
+              nodes { isResolved }
+            }
+          }
+        }
+      }
+    }" --jq '[.data.search.nodes[] | select(.reviewThreads.nodes | map(select(.isResolved == false)) | length > 0)] | length' 2>/dev/null) || unresolved=0
+  echo $(( cr > unresolved ? cr : unresolved ))
 }
 
 ralph_github_loop_once() {
