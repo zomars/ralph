@@ -13,13 +13,16 @@ ralph — Autonomous agent ecosystem for backlog-driven SDLC
 
 Usage: ralph <command> [options]
 
-Agent commands:
+Agent commands (Jira-driven):
   planner           Run the Planner agent (AFK loop by default)
   implementer       Run the Implementer agent
   reviewer          Run the Reviewer agent
   tester            Run the Tester agent
   refactor          Run the Refactorer agent
   documenter        Run the Documenter agent
+
+GitHub commands:
+  fixer             Run the Fixer agent (responds to PR review feedback)
 
 Agent options:
   --once            Run a single iteration, then exit
@@ -74,6 +77,7 @@ agent_display_name() {
     tester)       echo "Tester" ;;
     refactor)     echo "Refactorer" ;;
     documenter)   echo "Documenter" ;;
+    fixer)        echo "Fixer" ;;
   esac
 }
 
@@ -106,6 +110,35 @@ cmd_agent() {
   fi
 }
 
+cmd_github_agent() {
+  local agent_key="$1"
+  shift
+  local agent_name
+  agent_name=$(agent_display_name "$agent_key")
+
+  # Parse --once / --afk
+  local run_once="false"
+  for arg in "$@"; do
+    case "$arg" in
+      --once) run_once="true" ;;
+      --afk)  run_once="false" ;;
+      *)
+        echo "Unknown option for '$agent_key': $arg"
+        echo "Usage: ralph $agent_key [--once|--afk]"
+        exit 1
+        ;;
+    esac
+  done
+
+  source "$RALPH_HOME/lib/ralph-github-loop.sh"
+
+  if [[ "$run_once" == "true" ]]; then
+    ralph_github_loop_once "$agent_key" "$agent_name"
+  else
+    ralph_github_loop "$agent_key" "$agent_name"
+  fi
+}
+
 subcmd="${1:-}"
 [[ -n "$subcmd" ]] && shift
 
@@ -117,6 +150,7 @@ case "$subcmd" in
   validate)           exec "$RALPH_HOME/bin/validate-routing-impl" "$@" ;;
   planner|implementer|reviewer|tester|refactor|documenter)
                       cmd_agent "$subcmd" "$@" ;;
+  fixer)              cmd_github_agent "$subcmd" "$@" ;;
   *)
     echo "Unknown command: $subcmd"
     echo "Run 'ralph help' for usage."
