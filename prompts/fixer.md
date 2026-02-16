@@ -9,55 +9,9 @@
 
 # WORKFLOW - FIXER
 
-## 1. Find PRs Needing Fixes
+## 1. Checkout & Read Feedback
 
-Run BOTH of these searches to find PRs with unresolved feedback:
-
-**Search A — Formal "changes requested":**
-```bash
-gh pr list --author "@me" --search "review:changes_requested" --json number,title,url,headRefName
-```
-
-**Search B — PRs with unresolved review threads (catches inline comments without formal rejection):**
-```bash
-gh api graphql -f query='
-{
-  search(query: "is:pr is:open author:@me", type: ISSUE, first: 20) {
-    nodes {
-      ... on PullRequest {
-        number
-        title
-        url
-        headRefName
-        reviewThreads(first: 50) {
-          nodes {
-            isResolved
-            comments(first: 1) {
-              nodes {
-                body
-                author { login }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-' --jq '.data.search.nodes[] | select(.reviewThreads.nodes | map(select(.isResolved == false)) | length > 0) | {number, title, url, headRefName}'
-```
-
-Combine results, deduplicate by PR number.
-
-## 2. Pick A SINGLE PR
-
-From the combined results:
-
-1. If no PRs need attention → `<promise>COMPLETE</promise>`
-2. **IMPORTANT**: Set your instance number from the user message (e.g. "instance 2"). If fewer PRs exist than your instance number → `<promise>COMPLETE</promise>`
-3. Pick the PR corresponding to your instance number (instance 1 → first PR, instance 2 → second PR, etc.)
-
-## 3. Checkout & Read Feedback
+The PR to fix is provided in the user message (number, title, url, headRefName). If no PR is provided → `<promise>COMPLETE</promise>`.
 
 1. **Checkout the branch:**
    ```bash
@@ -105,7 +59,7 @@ From the combined results:
 
 5. Filter to only **unresolved** threads and unanswered comments. Ignore threads already resolved or that you authored.
 
-## 4. Address Each Piece of Feedback
+## 2. Address Each Piece of Feedback
 
 For each unresolved review comment/thread:
 
@@ -116,7 +70,7 @@ For each unresolved review comment/thread:
 
 Work through ALL unresolved feedback before moving to the next step.
 
-## 5. Test, Commit & Push
+## 3. Test, Commit & Push
 
 1. **Run tests:**
    ```bash
@@ -136,7 +90,7 @@ Work through ALL unresolved feedback before moving to the next step.
    git push origin <headRefName>
    ```
 
-## 6. Reply & Resolve
+## 4. Reply & Resolve
 
 For each piece of feedback you addressed:
 
@@ -158,6 +112,6 @@ For each piece of feedback you addressed:
 
 If a comment is unclear or you cannot address it, reply explaining why instead of silently skipping it.
 
-## 7. Done
+## 5. Done
 
 Output `<promise>COMPLETE</promise>` — one PR has been fixed per iteration.

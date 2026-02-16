@@ -5,33 +5,48 @@
 # Unlike ralph-gated-loop.sh, this does NOT use a Jira provider.
 # It gates on GitHub PRs needing attention (changes requested / unresolved comments).
 
-ralph_check_github_prs() {
-  # GitHub search qualifiers miss bot reviews, so use GraphQL to count
-  # PRs with unresolved review threads (catches both human and bot feedback).
-  # Also count formal "changes requested" as a fallback.
+ralph_fetch_github_prs() {
+  # Fetch PRs with unresolved review threads (catches both human and bot feedback).
+  # Returns a JSON array of {number, title, url, headRefName} for PRs needing fixes.
   # Scoped to the current repo via gh's default repo detection.
-  local cr unresolved repo
+  local repo
   repo=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null) || repo=""
   if [[ -z "$repo" ]]; then
-    echo 0
+    echo "[]"
     return
   fi
-  cr=$(gh pr list --author "@me" --search "review:changes_requested" \
-    --json number --jq 'length' 2>/dev/null) || cr=0
-  unresolved=$(gh api graphql -f query="
+
+  # Single GraphQL query fetches everything the fixer needs.
+  # We also merge in PRs with formal "changes requested" via gh pr list
+  # (those may not have unresolved threads yet).
+  local graphql_prs cr_prs
+  graphql_prs=$(gh api graphql -f query="
     {
       search(query: \"is:pr is:open author:@me repo:$repo\", type: ISSUE, first: 50) {
         nodes {
           ... on PullRequest {
             number
+            title
+            url
+            headRefName
             reviewThreads(first: 100) {
               nodes { isResolved }
             }
           }
         }
       }
-    }" --jq '[.data.search.nodes[] | select(.reviewThreads.nodes | map(select(.isResolved == false)) | length > 0)] | length' 2>/dev/null) || unresolved=0
-  echo $(( cr > unresolved ? cr : unresolved ))
+    }" --jq '[.data.search.nodes[] | select(.reviewThreads.nodes | map(select(.isResolved == false)) | length > 0) | {number, title, url, headRefName}]' 2>/dev/null) || graphql_prs="[]"
+
+  cr_prs=$(gh pr list --author "@me" --search "review:changes_requested" \
+    --json number,title,url,headRefName 2>/dev/null) || cr_prs="[]"
+
+  # Merge and deduplicate by PR number, preferring graphql_prs entries
+  echo "$graphql_prs"$'\n'"$cr_prs" \
+    | jq -s 'add | group_by(.number) | map(first) | sort_by(.number)'
+}
+
+ralph_check_github_prs() {
+  ralph_fetch_github_prs | jq 'length'
 }
 
 ralph_github_loop_once() {
@@ -99,8 +114,9 @@ ralph_github_loop() {
 
   # ─── Early exit for --once with no work (before titlebar clears screen) ─
   if [[ "$run_once" == "true" ]]; then
-    local early_count
-    early_count=$(ralph_check_github_prs)
+    local early_prs early_count
+    early_prs=$(ralph_fetch_github_prs)
+    early_count=$(echo "$early_prs" | jq 'length')
     if [[ "$early_count" -lt "$instance_num" ]]; then
       ralph_log "${agent_name} #$instance_num: No PRs needing fixes ($early_count found). Nothing to do."
       rm -rf "$instance_slot" 2>/dev/null
@@ -112,8 +128,9 @@ ralph_github_loop() {
 
   # ─── Main loop ──────────────────────────────────────────────────────────
   while true; do
-    local pr_count
-    pr_count=$(ralph_check_github_prs)
+    local pr_json pr_count
+    pr_json=$(ralph_fetch_github_prs)
+    pr_count=$(echo "$pr_json" | jq 'length')
 
     if [[ "$pr_count" -lt "$instance_num" ]]; then
       if [[ "$run_once" == "true" ]]; then
@@ -124,6 +141,10 @@ ralph_github_loop() {
       ralph_cooldown "$poll_interval" "${(U)agent_name} #$instance_num | Waiting" || die
       continue
     fi
+
+    # Pick the PR for this instance (1-indexed instance, 0-indexed array)
+    local target_pr
+    target_pr=$(echo "$pr_json" | jq ".[$((instance_num - 1))]")
 
     iteration=$((iteration + 1))
     tmpfile=$(mktemp)
@@ -138,7 +159,9 @@ ralph_github_loop() {
       --output-format stream-json \
       --dangerously-skip-permissions \
       --append-system-prompt "$(cat "$prompt_file")" \
-      "You are RALPH_${(U)agent_key}, instance $instance_num. Execute your workflow now. Start with Step 1." \
+      "You are RALPH_${(U)agent_key}, instance $instance_num. Fix this PR now:
+$target_pr
+Start with Step 1 — checkout the branch and read feedback." \
     | grep --line-buffered '^{' \
     | tee "$tmpfile" \
     | jq --unbuffered -rj "$stream_text" &
