@@ -56,6 +56,12 @@ Description content here...
 
 Use the `Read` tool to read the entire PRD file. Search for tasks matching your agent's criteria (status, labels, description state).
 
+**If the PRD has no tasks yet** (i.e., it's just a requirements document with user stories, features, or technical specs), your job as the **planner** is to:
+1. Read and understand the requirements/user stories
+2. Create an initial set of properly formatted tasks at the end of the file
+3. Each task should follow the format above with H2 heading, status, labels, and description
+4. Start with `status: to-do` and add appropriate labels (`needs-planning` if more detail needed, or ready for implementation)
+
 ### 2. Update Task Status
 
 Use the `Edit` tool to change the status comment:

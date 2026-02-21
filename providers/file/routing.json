@@ -12,7 +12,7 @@
   "global_label_excludes": ["needs-input"],
   "agents": {
     "planner": {
-      "query": "status:to-do,in-progress (description:empty OR label:needs-planning) !label:needs-input,needs-tests,tech-debt,ralph-blocked,ralph-failed,documented",
+      "query": "(file:needs-init OR (status:to-do,in-progress (description:empty OR label:needs-planning) !label:needs-input,needs-tests,tech-debt,ralph-blocked,ralph-failed,documented))",
       "adds_labels": ["needs-input", "needs-tests"],
       "rules": {
         "status_in": ["to-do", "in-progress"],

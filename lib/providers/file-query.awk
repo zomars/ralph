@@ -13,6 +13,7 @@
 
 BEGIN {
   task_count = 0
+  total_tasks = 0
   current_task_id = ""
   current_status = ""
   current_labels = ""
@@ -38,6 +39,7 @@ BEGIN {
   current_labels = ""
   current_description = ""
   in_task = 1
+  total_tasks++
   next
 }
 
@@ -79,6 +81,22 @@ END {
   if (in_task) {
     evaluate_task()
   }
+
+  # Special case: if no tasks found and query contains file:needs-init, return 1
+  if (total_tasks == 0) {
+    for (i = 1; i <= cond_count; i++) {
+      # Check direct condition or within OR group
+      if (conditions[i] == "file:needs-init") {
+        print 1
+        exit
+      }
+      if (substr(conditions[i], 1, 3) == "OR:" && index(conditions[i], "file:needs-init") > 0) {
+        print 1
+        exit
+      }
+    }
+  }
+
   print task_count
 }
 
@@ -193,6 +211,14 @@ function evaluate_condition(cond,    key, value, values, i, n, val) {
 
   key = substr(cond, 1, index(cond, ":")-1)
   value = substr(cond, index(cond, ":")+1)
+
+  # File condition (special meta-condition)
+  if (key == "file") {
+    if (value == "needs-init") {
+      return total_tasks == 0
+    }
+    return 0
+  }
 
   # Status condition
   if (key == "status") {
