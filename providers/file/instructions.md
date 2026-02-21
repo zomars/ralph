@@ -58,9 +58,14 @@ Use the `Read` tool to read the entire PRD file. Search for tasks matching your 
 
 **If the PRD has no tasks yet** (i.e., it's just a requirements document with user stories, features, or technical specs), your job as the **planner** is to:
 1. Read and understand the requirements/user stories
-2. Create an initial set of properly formatted tasks at the end of the file
+2. Create properly formatted tasks at the end of the file, one at a time
 3. Each task should follow the format above with H2 heading, status, labels, and description
 4. Start with `status: to-do` and add appropriate labels (`needs-planning` if more detail needed, or ready for implementation)
+5. **IMPORTANT**: When you've converted ALL requirements/user stories into tasks, add this marker at the very end of the file:
+   ```
+   <!-- ralph:initialized -->
+   ```
+   This tells Ralph that the PRD has been fully initialized and no more initialization tasks remain.
 
 ### 2. Update Task Status
 

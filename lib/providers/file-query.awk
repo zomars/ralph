@@ -19,6 +19,7 @@ BEGIN {
   current_labels = ""
   current_description = ""
   in_task = 0
+  file_initialized = 0
 
   # Parse query into conditions array
   parse_query(query)
@@ -67,6 +68,12 @@ BEGIN {
   next
 }
 
+# Check for initialization marker
+/<!-- ralph:initialized -->/ {
+  file_initialized = 1
+  next
+}
+
 # Collect description content (non-empty lines that aren't comments or headings)
 in_task && !/^##/ && !/^<!--/ && !/^---/ && NF > 0 {
   if (current_description == "") {
@@ -82,8 +89,8 @@ END {
     evaluate_task()
   }
 
-  # Special case: if no tasks found and query contains file:needs-init, return 1
-  if (total_tasks == 0) {
+  # Special case: if file needs initialization and query contains file:needs-init, return 1
+  if ((total_tasks == 0 || file_initialized == 0) && task_count == 0) {
     for (i = 1; i <= cond_count; i++) {
       # Check direct condition or within OR group
       if (conditions[i] == "file:needs-init") {
@@ -215,7 +222,8 @@ function evaluate_condition(cond,    key, value, values, i, n, val) {
   # File condition (special meta-condition)
   if (key == "file") {
     if (value == "needs-init") {
-      return total_tasks == 0
+      # File needs init if: no tasks exist OR tasks exist but no init marker
+      return total_tasks == 0 || (total_tasks > 0 && file_initialized == 0)
     }
     return 0
   }
