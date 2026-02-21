@@ -47,8 +47,8 @@ ralph_gated_loop() {
   ralph_validate_env $PROVIDER_ENV_VARS
 
   # Resolve paths
-  local jql prompt_file provider_instructions poll_interval
-  jql="$(ralph_get_jql "$agent_key")"
+  local query prompt_file provider_instructions poll_interval
+  query="$(ralph_get_query "$agent_key")"
   prompt_file="$(ralph_get_prompt "$agent_key")"
   provider_instructions="$(ralph_get_provider_instructions)"
   poll_interval="$(ralph_get_poll_interval)"
@@ -90,7 +90,7 @@ ralph_gated_loop() {
   # ─── Early exit for --once with no work (before titlebar clears screen) ─
   if [[ "$run_once" == "true" ]]; then
     local early_count
-    early_count=$(provider_check_tasks "$jql")
+    early_count=$(provider_check_tasks "$query")
     if [[ "$early_count" -lt "$instance_num" ]]; then
       ralph_log "${agent_name} #$instance_num: No tasks available ($early_count found). Nothing to do."
       rm -rf "$instance_slot" 2>/dev/null
@@ -103,7 +103,7 @@ ralph_gated_loop() {
   # ─── Main loop ──────────────────────────────────────────────────────────
   while true; do
     local task_count
-    task_count=$(provider_check_tasks "$jql")
+    task_count=$(provider_check_tasks "$query")
 
     if [[ "$task_count" -lt "$instance_num" ]]; then
       if [[ "$run_once" == "true" ]]; then

@@ -69,7 +69,7 @@ ralph_load_provider() {
 
 # ─── Queries ──────────────────────────────────────────────────────────────────
 
-ralph_get_jql() {
+ralph_get_query() {
   local agent="$1"
   local routing_json
   routing_json="$(ralph_get_routing_json)"
@@ -77,7 +77,14 @@ ralph_get_jql() {
     ralph_error "Routing config not found: $routing_json"
     exit 1
   fi
-  jq -r ".agents.${agent}.jql" "$routing_json"
+  # Try 'query' field first, fallback to 'jql' for backward compatibility
+  local query=$(jq -r ".agents.${agent}.query // .agents.${agent}.jql" "$routing_json")
+  echo "$query"
+}
+
+# Deprecated: use ralph_get_query() instead
+ralph_get_jql() {
+  ralph_get_query "$@"
 }
 
 

@@ -29,11 +29,19 @@ ralph config        # Verify configuration
 
 Ralph loads `.ralphrc` from the current working directory. This file sets your backlog provider and credentials:
 
+**Jira Provider:**
 ```zsh
 export RALPH_PROVIDER="jira"
 export JIRA_EMAIL="you@example.com"
 export JIRA_API_TOKEN="your-token"
 export JIRA_BASE_URL="https://yourorg.atlassian.net"
+export RALPH_POLL_INTERVAL=5
+```
+
+**File Provider:**
+```zsh
+export RALPH_PROVIDER="file"
+export RALPH_PRD_FILE="./prd.md"  # Optional, defaults to ./prd.md
 export RALPH_POLL_INTERVAL=5
 ```
 
@@ -85,6 +93,7 @@ Ralph abstracts the backlog system. Set `RALPH_PROVIDER` to switch providers.
 ### Supported Providers
 
 - **jira** (default) — Jira Cloud via REST API
+- **file** — Local markdown file (prd.md)
 
 ### Provider Architecture
 
@@ -95,6 +104,38 @@ Each provider consists of 3 files:
 | `lib/providers/<name>.sh` | Shell: `PROVIDER_ENV_VARS` array + `provider_check_tasks()` function |
 | `providers/<name>/instructions.md` | Claude system prompt overlay with tool mappings |
 | `providers/<name>/routing.json` | Queries and routing rules per agent |
+
+### File Provider
+
+The file provider lets you use Ralph with a local markdown file instead of a cloud backlog system. Tasks are defined as H2 sections with metadata in HTML comments.
+
+**Task Format:**
+```markdown
+## USER-001: Feature Name
+<!-- status: to-do -->
+<!-- labels: enhancement, needs-planning -->
+<!-- priority: high -->
+
+Description content here...
+
+### Acceptance Criteria
+- [ ] Item 1
+```
+
+**Supported Statuses:** `to-do`, `in-progress`, `in-review`, `done`
+
+**Standard Labels:** `needs-planning`, `needs-tests`, `tech-debt`, `ralph-blocked`, `ralph-failed`, `needs-input`, `documented`
+
+**Query Syntax:**
+- `status:to-do,in-progress` — status IN list
+- `!status:done` — status NOT in list
+- `label:needs-tests` — has label
+- `!label:tech-debt` — doesn't have label
+- `description:empty` — description is empty or contains TODO
+- `!description:empty` — description is not empty
+- `(condition OR condition)` — OR groups
+
+**Example:** See `examples/prd.md` for a complete template.
 
 ### Adding a New Provider
 
@@ -165,12 +206,19 @@ ralph/
 │   ├── ralph-gated-loop.sh       # Parameterized backlog-gated loop
 │   ├── ralph-iter-loop.sh        # Parameterized N-iteration loop
 │   └── providers/
-│       └── jira.sh               # Jira provider implementation
+│       ├── jira.sh               # Jira provider implementation
+│       ├── file.sh               # File provider implementation
+│       └── file-query.awk        # File query parser
 ├── prompts/                      # Provider-agnostic workflow prompts
 ├── providers/
-│   └── jira/
-│       ├── instructions.md       # Jira MCP tool mappings
-│       └── routing.json          # Jira queries + validation rules
+│   ├── jira/
+│   │   ├── instructions.md       # Jira MCP tool mappings
+│   │   └── routing.json          # Jira queries + validation rules
+│   └── file/
+│       ├── instructions.md       # File provider instructions
+│       └── routing.json          # File queries + validation rules
+├── examples/
+│   └── prd.md                    # Example PRD template for file provider
 ├── package.json
 ├── .ralphrc.example
 └── README.md
