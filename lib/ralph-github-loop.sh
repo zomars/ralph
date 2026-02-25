@@ -178,6 +178,12 @@ Start with Step 1 — checkout the branch and read feedback.") \
 
     local result
     result=$(jq -r "$final_result" "$tmpfile")
+
+    # Persist session log before deleting tmpfile
+    local pr_number
+    pr_number=$(echo "$target_pr" | jq -r '.number // empty')
+    ralph_save_session_log "$tmpfile" "$agent_key" "$instance_num" "PR-${pr_number:-unknown}"
+
     rm -f "$tmpfile"
     tmpfile=""
 

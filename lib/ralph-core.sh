@@ -117,6 +117,29 @@ ralph_get_jql() {
 }
 
 
+# ─── Session Logs ────────────────────────────────────────────────────────
+
+# ralph_save_session_log <tmpfile> <agent_key> <instance_num> [task_id]
+# Copies raw stream-json to persistent log dir. No-op if RALPH_LOG_DIR is unset.
+ralph_save_session_log() {
+  [[ -z "$RALPH_LOG_DIR" ]] && return
+  local tmpfile="$1" agent_key="$2" instance_num="$3" task_id="${4:-unknown}"
+  [[ ! -f "$tmpfile" ]] && return
+
+  local log_dir="${RALPH_LOG_DIR%/}/${agent_key}-${instance_num}"
+  mkdir -p "$log_dir"
+
+  local timestamp
+  timestamp=$(date '+%Y-%m-%dT%H:%M:%S')
+  cp "$tmpfile" "$log_dir/${timestamp}-${task_id}.log"
+}
+
+# ralph_extract_task_key <tmpfile>
+# Greps stream-json for a Jira-style task key (e.g. PRODUCT-620). Prints first match.
+ralph_extract_task_key() {
+  grep -oE '[A-Z][A-Z_]+-[0-9]+' "$1" 2>/dev/null | head -1
+}
+
 # ─── Config ───────────────────────────────────────────────────────────────────
 
 ralph_get_poll_interval() {

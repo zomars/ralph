@@ -11,3 +11,6 @@ export JIRA_BASE_URL="https://yourorg.atlassian.net"
 
 # Polling interval in seconds (default: 15)
 export RALPH_POLL_INTERVAL=5
+
+# Session log directory (unset = no logs saved)
+# export RALPH_LOG_DIR="./ralph-logs"

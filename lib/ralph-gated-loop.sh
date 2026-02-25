@@ -147,6 +147,12 @@ $(cat "$provider_instructions")" \
 
     local result
     result=$(jq -r "$final_result" "$tmpfile")
+
+    # Persist session log before deleting tmpfile
+    local task_key
+    task_key=$(ralph_extract_task_key "$tmpfile")
+    ralph_save_session_log "$tmpfile" "$agent_key" "$instance_num" "${task_key:-unknown}"
+
     rm -f "$tmpfile"
     tmpfile=""
 
