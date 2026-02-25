@@ -12,7 +12,7 @@
 ## 1. Load Context
 
 1. Find assigned tasks using the backlog search tool with query:
-   `assignee = currentUser() AND status in ("To Do", "In Progress") AND (description is not EMPTY AND description !~ "TODO") AND (labels is EMPTY OR labels not in ("needs-tests", "tech-debt", "ralph-blocked", "needs-planning", "needs-input")) ORDER BY priority DESC`
+   `assignee = currentUser() AND status in ("To Do", "In Progress") AND (description is not EMPTY AND description !~ "TODO") AND (labels is EMPTY OR labels not in ("needs-tests", "tech-debt", "ralph-blocked", "needs-planning", "needs-input")) AND issueKey not in linkedIssuesOf("status != Done", "is blocked by") ORDER BY priority DESC`
    **IMPORTANT**: Set `maxResults` to your instance number (from the user message, e.g. "instance 2" → `maxResults=2`). Default to `maxResults=1` if no instance number is given.
 2. Read last 10 RALPH commits.
 
@@ -33,6 +33,23 @@ Fetch the chosen issue's full details using the backlog task detail tool.
 - If there are recent comments from reviewers or other agents, **READ THEM CAREFULLY**.
 - Comments may contain rejection feedback, change requests, or new instructions that override the original description.
 - If a reviewer sent the task back, address their feedback before doing anything else.
+
+### Branch Setup
+
+After picking your task, create or checkout the feature branch:
+
+```bash
+git fetch origin
+# Check if branch already exists on remote
+if git ls-remote --heads origin "ralph/<TASK-KEY>" | grep -q .; then
+  git checkout "ralph/<TASK-KEY>"
+  git pull origin "ralph/<TASK-KEY>"
+else
+  git checkout -b "ralph/<TASK-KEY>" origin/main
+fi
+```
+
+All work for this task happens on the `ralph/<TASK-KEY>` branch.
 
 ## 3. Do the Task
 
@@ -83,13 +100,35 @@ After work is complete:
 
 Always discover available transitions rather than hardcoding status names.
 
-## 5. Commit & Stop
+## 5. Commit, Push & PR
 
 ```
 RALPH: <what you did> (<TASK-KEY>)
 
 Evidence: <brief description of verification performed>
 ```
+
+After committing, push and open (or update) a PR:
+
+```bash
+git push -u origin "ralph/<TASK-KEY>"
+# Create PR if one doesn't exist yet
+if ! gh pr list --head "ralph/<TASK-KEY>" --json number --jq '.[0].number' 2>/dev/null | grep -q .; then
+  gh pr create --base main --head "ralph/<TASK-KEY>" --title "<TASK-KEY>: <summary>" --body "Implements <TASK-KEY>"
+fi
+```
+
+### Release the branch
+
+**CRITICAL**: Before stopping, switch back to your workspace branch so other agents can checkout the task branch:
+
+```bash
+git checkout "ralph-workspace/implementer-<N>"
+```
+
+(Replace `<N>` with your instance number from the user message.)
+
+Then output `<promise>COMPLETE</promise>`.
 
 ---
 

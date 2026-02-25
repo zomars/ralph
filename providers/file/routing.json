@@ -24,7 +24,7 @@
       "prompt": "prompts/planner.md"
     },
     "implementer": {
-      "query": "status:to-do,in-progress !description:empty !label:needs-tests,tech-debt,ralph-blocked,needs-planning,needs-input",
+      "query": "status:to-do,in-progress !description:empty !label:needs-tests,tech-debt,ralph-blocked,needs-planning,needs-input !blocked",
       "adds_labels": ["ralph-blocked"],
       "rules": {
         "status_in": ["to-do", "in-progress"],

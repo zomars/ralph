@@ -39,7 +39,12 @@ Fetch the chosen issue's full details using the backlog task detail tool.
 
 **Goal**: Improve code quality without changing behavior.
 
-1.  **Checkout**: Ensure you are on the correct branch/commit.
+1.  **Checkout the task branch**:
+    ```bash
+    git fetch origin
+    git checkout "ralph/<TASK-KEY>"
+    git pull origin "ralph/<TASK-KEY>"
+    ```
 2.  **Analyze**: Look at the code marked as "tech-debt".
 3.  **Refactor**:
     - Simplify logic.
@@ -56,10 +61,24 @@ Fetch the chosen issue's full details using the backlog task detail tool.
 3.  **Transition**: Hand it back to Review.
     - Transition to **"In Review"**. (So Reviewer can verify you didn't break anything).
 
-## 5. Commit & Stop
+## 5. Commit, Push & Stop
 
 ```
 RALPH_REFACTOR: Refactored <TASK-KEY>
 ```
+
+```bash
+git push origin "ralph/<TASK-KEY>"
+```
+
+### Release the branch
+
+**CRITICAL**: Before stopping, switch back to your workspace branch:
+
+```bash
+git checkout "ralph-workspace/refactor-<N>"
+```
+
+(Replace `<N>` with your instance number from the user message.)
 
 Output `<promise>COMPLETE</promise>` when the loop finishes one task.

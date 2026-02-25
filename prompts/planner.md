@@ -35,7 +35,8 @@ Fetch the chosen issue's full details using the backlog task detail tool.
     - **User Story**: "As a [User], I want [Feature], so that [Benefit]."
     - **Acceptance Criteria**: Checklist of what "Done" looks like.
     - **Technical Notes**: Files to touch, API endpoints to change.
-4.  **Unknowns?**: If you genuinely don't know what to do:
+4.  **Create dependency links**: When planning related tasks (e.g., an epic broken into subtasks), create "blocks" issue links between tasks that have natural ordering. For example, if "Create API endpoint" must be done before "Build UI for endpoint", link them so the API task **blocks** the UI task. This prevents agents from picking up dependent tasks before their prerequisites are done.
+5.  **Unknowns?**: If you genuinely don't know what to do:
     - Add label `needs-input`.
     - Add comment: "@[User] I need clarification on X."
     - STOP.

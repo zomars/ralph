@@ -49,6 +49,14 @@ Fetch the chosen issue's full details using the backlog task detail tool.
 
 **Then test like a human would. Follow these steps:**
 
+### Checkout the task branch
+
+```bash
+git fetch origin
+git checkout "ralph/<TASK-KEY>"
+git pull origin "ralph/<TASK-KEY>"
+```
+
 ### 3a. Understand What to Test
 
 1. **Read the issue description and all comments** carefully. Comments from reviewers may specify what testing was missing or what to focus on. Identify the acceptance criteria and expected behavior.
@@ -112,15 +120,29 @@ After testing is complete:
 
 Always discover available transitions rather than hardcoding status names.
 
-## 5. Commit & Stop
+## 5. Commit, Push & Stop
 
-If you wrote test files, commit them:
+If you wrote test files, commit and push:
 
 ```
 RALPH_TESTER: Tested <TASK-KEY>
 
 Evidence: <brief summary — PASS/FAIL, what was tested>
 ```
+
+```bash
+git push origin "ralph/<TASK-KEY>"
+```
+
+### Release the branch
+
+**CRITICAL**: Before stopping, switch back to your workspace branch:
+
+```bash
+git checkout "ralph-workspace/tester-<N>"
+```
+
+(Replace `<N>` with your instance number from the user message.)
 
 Then output `<promise>COMPLETE</promise>`.
 

@@ -18,6 +18,7 @@ Each task is an H2 heading with a task ID prefix, followed by metadata in HTML c
 <!-- status: to-do -->
 <!-- labels: enhancement, needs-planning -->
 <!-- priority: high -->
+<!-- depends-on: USER-003 -->
 
 Description content here...
 
@@ -38,6 +39,12 @@ Description content here...
 **Labels**: Comma-separated list in `<!-- labels: ... -->` comment. Standard labels: `needs-planning`, `needs-tests`, `tech-debt`, `ralph-blocked`, `ralph-failed`, `needs-input`, `documented`.
 
 **Priority**: One of `high`, `medium`, `low` in `<!-- priority: ... -->` comment (optional).
+
+**Depends-on**: Comma-separated list of task IDs this task depends on, in `<!-- depends-on: ... -->` comment (optional). A task is "blocked" if any of its dependencies are not `done`.
+
+```markdown
+<!-- depends-on: USER-001, USER-003 -->
+```
 
 **Description**: All markdown content between the metadata comments and the next H2 heading or HR separator (`---`).
 
@@ -124,6 +131,7 @@ This provider uses a simple key-value query syntax (not JQL):
 - `!label:tech-debt` — doesn't have label
 - `description:empty` — description is empty or contains TODO
 - `!description:empty` — description is not empty
+- `!blocked` — exclude tasks whose `depends-on` includes non-done tasks
 
 Multiple conditions are combined with AND logic (all must match).
 

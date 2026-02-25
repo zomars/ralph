@@ -10,6 +10,7 @@
 #   !label:val             — doesn't have label
 #   description:empty      — description is empty or TODO
 #   !description:empty     — description not empty
+#   !blocked               — exclude tasks with unresolved depends-on
 
 BEGIN {
   task_count = 0
@@ -18,6 +19,7 @@ BEGIN {
   current_status = ""
   current_labels = ""
   current_description = ""
+  current_depends_on = ""
   in_task = 0
   file_initialized = 0
 
@@ -27,9 +29,9 @@ BEGIN {
 
 # Start of new task (H2 heading with task ID)
 /^## [A-Z]+-[0-9]+:/ {
-  # Evaluate previous task if any
+  # Store previous task if any
   if (in_task) {
-    evaluate_task()
+    store_task()
   }
 
   # Extract task ID from heading
@@ -39,6 +41,7 @@ BEGIN {
   current_status = ""
   current_labels = ""
   current_description = ""
+  current_depends_on = ""
   in_task = 1
   total_tasks++
   next
@@ -68,6 +71,16 @@ BEGIN {
   next
 }
 
+# Depends-on comment (e.g., <!-- depends-on: TASK-001, TASK-002 -->)
+/<!-- depends-on:/ {
+  current_depends_on = $0
+  sub(/.*<!-- depends-on: */, "", current_depends_on)
+  sub(/ *-->.*$/, "", current_depends_on)
+  gsub(/ /, "", current_depends_on)
+  current_depends_on = "," current_depends_on ","
+  next
+}
+
 # Check for initialization marker
 /<!-- ralph:initialized -->/ {
   file_initialized = 1
@@ -83,9 +96,20 @@ in_task && !/^##/ && !/^<!--/ && !/^---/ && NF > 0 {
   }
 }
 
-# End of file - evaluate last task
+# End of file - store last task, then evaluate all
 END {
   if (in_task) {
+    store_task()
+  }
+
+  # Now evaluate all tasks (two-pass: statuses are known, dependencies can be resolved)
+  for (t = 1; t <= total_tasks; t++) {
+    # Set current_* from stored arrays for evaluate_task
+    current_task_id = task_ids[t]
+    current_status = task_statuses[t]
+    current_labels = task_labels[t]
+    current_description = task_descriptions[t]
+    current_depends_on = task_depends[t]
     evaluate_task()
   }
 
@@ -112,6 +136,16 @@ END {
 function trim(s) {
   gsub(/^ +| +$/, "", s)
   return s
+}
+
+function store_task() {
+  task_ids[total_tasks] = current_task_id
+  task_statuses[total_tasks] = current_status
+  task_labels[total_tasks] = current_labels
+  task_descriptions[total_tasks] = current_description
+  task_depends[total_tasks] = current_depends_on
+  # Build lookup: task_id -> status
+  task_status_map[current_task_id] = current_status
 }
 
 function parse_query(q,    i, in_group, group, rest, ch, word) {
@@ -176,6 +210,15 @@ function evaluate_task(    i, cond, matches) {
     # Negated condition
     else if (substr(cond, 1, 1) == "!") {
       cond = substr(cond, 2)
+      if (cond == "blocked") {
+        # !blocked — exclude tasks whose dependencies are not all done
+        if (!check_blocked()) {
+          continue  # Not blocked, passes
+        } else {
+          matches = 0
+          break
+        }
+      }
       if (!evaluate_condition(cond)) {
         continue  # Negation passes
       } else {
@@ -197,6 +240,26 @@ function evaluate_task(    i, cond, matches) {
   if (matches) {
     task_count++
   }
+}
+
+# Returns 1 if the current task is blocked (has depends-on with non-done deps)
+function check_blocked(    deps, i, n, dep_id, dep_status) {
+  if (current_depends_on == "" || current_depends_on == ",,") {
+    return 0  # No dependencies
+  }
+  # Strip leading/trailing commas, split by comma
+  dep_list = current_depends_on
+  gsub(/^,|,$/, "", dep_list)
+  n = split(dep_list, deps, ",")
+  for (i = 1; i <= n; i++) {
+    dep_id = trim(deps[i])
+    if (dep_id == "") continue
+    dep_status = task_status_map[dep_id]
+    if (dep_status != "done") {
+      return 1  # Blocked by a non-done dependency
+    }
+  }
+  return 0  # All dependencies are done
 }
 
 function evaluate_or_group(group,    parts, i, n) {

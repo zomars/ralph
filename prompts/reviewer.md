@@ -34,7 +34,12 @@ Fetch the chosen issue's full details using the backlog task detail tool.
 
 **Goal**: Verify the implementation is correct, clean, and has been properly tested with evidence.
 
-1.  **Checkout**: Ensure you are on the correct branch/commit for this issue.
+1.  **Checkout the task branch**:
+    ```bash
+    git fetch origin
+    git checkout "ralph/<TASK-KEY>"
+    git pull origin "ralph/<TASK-KEY>"
+    ```
 2.  **Run Tests**: Execute `npm run test` (or equivalent).
     - If tests FAIL: Reject immediately.
 3.  **Analyze Code**: Read the changes.
@@ -72,17 +77,31 @@ Based on your analysis, choose ONE path:
 
 - **Precondition**: Tests pass, code is clean, AND a test report with screenshots exists in comments.
 - **Action**: Comment "Verified. Tests passed. Browser testing evidence confirmed. Code looks good."
+- **Merge PR**: `gh pr merge "ralph/<TASK-KEY>" --squash --delete-branch`
 - **Transition**: Move status to **"Done"**.
 
 ## 5. Commit & Stop
 
-If you made any changes (e.g. minor fixes, adding labels via script), commit them:
+If you made any changes (e.g. minor fixes, adding labels via script), commit and push:
 
 ```
 RALPH_REVIEWER: Reviewed <TASK-KEY> -> <DECISION>
 ```
 
-If you ONLY updated the backlog:
-Output `<promise>COMPLETE</promise>` immediately.
+```bash
+git push origin "ralph/<TASK-KEY>"
+```
+
+### Release the branch
+
+**CRITICAL**: Before stopping, switch back to your workspace branch:
+
+```bash
+git checkout "ralph-workspace/reviewer-<N>"
+```
+
+(Replace `<N>` with your instance number from the user message.)
+
+If you ONLY updated the backlog (no code changes), release the branch immediately.
 
 Output `<promise>COMPLETE</promise>` when the loop finishes one task.

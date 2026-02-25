@@ -19,6 +19,35 @@ ralph_init() {
   export RALPH_PROVIDER="${RALPH_PROVIDER:-jira}"
 }
 
+# ─── Worktrees ────────────────────────────────────────────────────────────────
+
+# ralph_setup_worktree <agent_key> <instance_num>
+# Creates (or reuses) a persistent git worktree for this agent instance.
+# Prints the worktree directory path to stdout.
+ralph_setup_worktree() {
+  local agent_key="$1" instance_num="$2"
+  local work_dir="/tmp/ralph-worktrees/${agent_key}-${instance_num}"
+
+  if [[ ! -d "$work_dir" ]]; then
+    local branch_name="ralph-workspace/${agent_key}-${instance_num}"
+    # Remove stale worktree entry if git still tracks it
+    git worktree prune 2>/dev/null
+    # Delete stale branch if it exists but worktree is gone
+    git branch -D "$branch_name" 2>/dev/null
+    git worktree add "$work_dir" -b "$branch_name" HEAD --quiet
+  fi
+
+  echo "$work_dir"
+}
+
+# ralph_cleanup_worktree <work_dir>
+# Removes a worktree directory and its tracking branch.
+ralph_cleanup_worktree() {
+  local work_dir="$1"
+  [[ -d "$work_dir" ]] && git worktree remove "$work_dir" --force 2>/dev/null
+  git worktree prune 2>/dev/null
+}
+
 # ─── Logging ──────────────────────────────────────────────────────────────────
 
 ralph_log() {

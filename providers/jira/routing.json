@@ -24,7 +24,7 @@
       "prompt": "prompts/planner.md"
     },
     "implementer": {
-      "jql": "assignee = currentUser() AND status in ('To Do', 'In Progress') AND (description is not EMPTY AND description !~ 'TODO') AND (labels is EMPTY OR labels not in ('needs-tests', 'tech-debt', 'ralph-blocked', 'needs-planning', 'needs-input')) ORDER BY priority DESC",
+      "jql": "assignee = currentUser() AND status in ('To Do', 'In Progress') AND (description is not EMPTY AND description !~ 'TODO') AND (labels is EMPTY OR labels not in ('needs-tests', 'tech-debt', 'ralph-blocked', 'needs-planning', 'needs-input')) AND issueKey not in linkedIssuesOf('status != Done', 'is blocked by') ORDER BY priority DESC",
       "adds_labels": ["ralph-blocked"],
       "rules": {
         "status_in": ["To Do", "In Progress"],

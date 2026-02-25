@@ -84,6 +84,26 @@ Use only these ADF node types — anything else will be rejected:
 
 **IMPORTANT**: Every `listItem` MUST contain a `paragraph` node — never put `text` nodes directly inside `listItem`. Never use `orderedList` — use `bulletList` only. If ADF fails on the first attempt, simplify the ADF structure (use only paragraphs and bullet lists) and retry once. The plan MUST go in the description field — never post it as a comment.
 
+## Issue Links (Dependencies)
+
+Use issue links to express task ordering. The **Planner** creates these when breaking down related work.
+
+**Create a "blocks" link** (task A blocks task B):
+```bash
+mcp__jira__editJiraIssue(issueIdOrKey: "PROJ-A", linkType: "Blocks", linkedIssueKey: "PROJ-B")
+```
+
+Or use the REST API directly:
+```bash
+# A blocks B  →  outward "blocks", inward "is blocked by"
+gh api -X POST "https://<site>.atlassian.net/rest/api/3/issueLink" \
+  -f type[name]="Blocks" \
+  -f inwardIssue[key]="PROJ-B" \
+  -f outwardIssue[key]="PROJ-A"
+```
+
+The implementer JQL automatically excludes tasks that are blocked by non-Done issues, so dependencies are enforced at the query level — no agent needs to manually check links.
+
 ## Cloud ID
 
 When calling Jira tools, use the `cloudId` from your Jira configuration. Call `mcp__jira__getAccessibleAtlassianResources` if you need to discover it.
