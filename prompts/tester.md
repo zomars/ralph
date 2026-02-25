@@ -59,9 +59,10 @@ git pull origin "ralph/<TASK-KEY>"
 
 ### 3a. Understand What to Test
 
-1. **Read the issue description and all comments** carefully. Comments from reviewers may specify what testing was missing or what to focus on. Identify the acceptance criteria and expected behavior.
-2. **Explore the codebase** to understand the feature: find relevant routes, components, API endpoints. Understand what URL to navigate to and what UI elements to interact with.
-3. **Identify the app's dev server command** (e.g. `npm run dev`, `yarn dev`) and start it if not already running.
+1. **Read project setup docs first**: Check for `AGENTS.md`, `CLAUDE.md`, `README.md`, or similar files in the repo root. Read any referenced setup guides (e.g. local development, testing guidelines). These contain critical info about how to run the dev stack, known gotchas, and test credentials. Do this BEFORE trying to start any services.
+2. **Read the issue description and all comments** carefully. Comments from reviewers may specify what testing was missing or what to focus on. Identify the acceptance criteria and expected behavior.
+3. **Explore the codebase** to understand the feature: find relevant routes, components, API endpoints. Understand what URL to navigate to and what UI elements to interact with.
+4. **Start the dev environment** following the project setup docs. If the docs describe required services (databases, proxies, etc.), start them in the documented order.
 
 ### 3b. Test Using Playwright MCP
 
