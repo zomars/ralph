@@ -31,9 +31,9 @@ ralph_setup_worktree() {
   if [[ ! -d "$work_dir" ]]; then
     local branch_name="ralph-workspace/${agent_key}-${instance_num}"
     # Remove stale worktree entry if git still tracks it
-    git worktree prune 2>/dev/null
+    git worktree prune 2>/dev/null || true
     # Delete stale branch if it exists but worktree is gone
-    git branch -D "$branch_name" 2>/dev/null
+    git branch -D "$branch_name" >/dev/null 2>&1 || true
     git worktree add "$work_dir" -b "$branch_name" HEAD --quiet
   fi
 
@@ -44,8 +44,8 @@ ralph_setup_worktree() {
 # Removes a worktree directory and its tracking branch.
 ralph_cleanup_worktree() {
   local work_dir="$1"
-  [[ -d "$work_dir" ]] && git worktree remove "$work_dir" --force 2>/dev/null
-  git worktree prune 2>/dev/null
+  [[ -d "$work_dir" ]] && git worktree remove "$work_dir" --force 2>/dev/null || true
+  git worktree prune 2>/dev/null || true
 }
 
 # ─── Logging ──────────────────────────────────────────────────────────────────
