@@ -59,10 +59,10 @@ git pull origin "ralph/<TASK-KEY>"
 
 ### 3a. Understand What to Test
 
-1. **Read project setup docs first**: Check for `AGENTS.md`, `CLAUDE.md`, `README.md`, or similar files in the repo root. Read any referenced setup guides (e.g. local development, testing guidelines). These contain critical info about how to run the dev stack, known gotchas, and test credentials. Do this BEFORE trying to start any services.
+1. **Explore the project**: Before starting any services, explore the repo to understand its architecture, local dev setup, and testing conventions. Look at the root directory, read any docs or guides you find. Understand how to run the dev stack, what services are required, and any known gotchas.
 2. **Read the issue description and all comments** carefully. Comments from reviewers may specify what testing was missing or what to focus on. Identify the acceptance criteria and expected behavior.
-3. **Explore the codebase** to understand the feature: find relevant routes, components, API endpoints. Understand what URL to navigate to and what UI elements to interact with.
-4. **Start the dev environment** following the project setup docs. If the docs describe required services (databases, proxies, etc.), start them in the documented order.
+3. **Explore the relevant code** to understand the feature: find relevant routes, components, API endpoints. Understand what URL to navigate to and what UI elements to interact with.
+4. **Start the dev environment** following what you learned from exploring the project. If required services (databases, proxies, etc.) need to start in a specific order, follow that.
 
 ### 3b. Test Using Playwright MCP
 

@@ -34,19 +34,20 @@ Fetch the chosen issue's full details using the backlog task detail tool.
 
 **Goal**: Verify the implementation is correct, clean, and has been properly tested with evidence.
 
-1.  **Checkout the task branch**:
+1.  **Explore the project**: Before reviewing, explore the repo to understand its architecture and conventions. Look at the root directory, read any docs or guides you find.
+2.  **Checkout the task branch**:
     ```bash
     git fetch origin
     git checkout "ralph/<TASK-KEY>"
     git pull origin "ralph/<TASK-KEY>"
     ```
-2.  **Run Tests**: Execute `npm run test` (or equivalent).
+3.  **Run Tests**: Execute `npm run test` (or equivalent).
     - If tests FAIL: Reject immediately.
-3.  **Analyze Code**: Read the changes.
+4.  **Analyze Code**: Read the changes.
     - **Logic Check**: Is the implementation correct based on the ticket description?
     - **Code Quality**: Is the code clean? Any obvious bad patterns?
     - **Test Coverage**: Are there new tests for the new feature?
-4.  **Verify Testing Evidence**: Read the issue comments looking for a **test report from the Tester agent**.
+5.  **Verify Testing Evidence**: Read the issue comments looking for a **test report from the Tester agent**.
     - A valid test report MUST include: numbered test steps, screenshots as evidence, and a PASS/FAIL result.
     - If no test report exists, or the report lacks screenshots/evidence, the task is NOT ready for approval — route to Path B.
 

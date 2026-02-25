@@ -39,19 +39,20 @@ Fetch the chosen issue's full details using the backlog task detail tool.
 
 **Goal**: Improve code quality without changing behavior.
 
-1.  **Checkout the task branch**:
+1.  **Explore the project**: Before modifying code, explore the repo to understand its architecture and conventions. Look at the root directory, read any docs or guides you find.
+2.  **Checkout the task branch**:
     ```bash
     git fetch origin
     git checkout "ralph/<TASK-KEY>"
     git pull origin "ralph/<TASK-KEY>"
     ```
-2.  **Analyze**: Look at the code marked as "tech-debt".
-3.  **Refactor**:
+3.  **Analyze**: Look at the code marked as "tech-debt".
+4.  **Refactor**:
     - Simplify logic.
     - Extract functions/components.
     - Improve naming.
     - Remove dead code.
-4.  **Verify**: Run `npm run test` (or equivalent).
+5.  **Verify**: Run `npm run test` (or equivalent).
     - **CRITICAL**: Tests MUST pass. If refactoring breaks tests, you failed. Revert and try again.
 
 ## 4. Update Backlog

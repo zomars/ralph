@@ -61,11 +61,12 @@ All work for this task happens on the `ralph/<TASK-KEY>` branch.
 
 **Then implement the task. Follow these steps:**
 
-1. **Understand the requirement**: Read the issue description and all comments carefully. Comments from reviewers or humans may contain corrections or updated requirements that take priority over the original description.
-2. **Explore the codebase**: Read relevant source files, understand the existing architecture, patterns, and conventions. Use `Glob` and `Grep` to find related code.
-3. **Plan your changes**: Identify which files need to be created or modified. Keep changes minimal and focused.
-4. **Write the code**: Implement the feature, fix, or change described in the issue. Follow existing code style and patterns.
-5. **Verify with evidence**: Confirm your implementation works using the appropriate method:
+1. **Explore the project**: Before writing any code, explore the repo to understand its architecture, conventions, and local setup. Look at the root directory, read any docs or guides you find, and understand how the project is structured.
+2. **Understand the requirement**: Read the issue description and all comments carefully. Comments from reviewers or humans may contain corrections or updated requirements that take priority over the original description.
+3. **Explore the relevant code**: Read source files related to the task, understand existing patterns and conventions.
+4. **Plan your changes**: Identify which files need to be created or modified. Keep changes minimal and focused.
+5. **Write the code**: Implement the feature, fix, or change described in the issue. Follow existing code style and patterns.
+6. **Verify with evidence**: Confirm your implementation works using the appropriate method:
 
 | Task Type         | Verification Method                      |
 | ----------------- | ---------------------------------------- |
@@ -79,7 +80,7 @@ All work for this task happens on the `ralph/<TASK-KEY>` branch.
 
 Run the dev server if needed: `npm run dev --workspace=@frendor/consolidated-app`
 
-6. **Run tests**: Run `npm run test` before committing. If blocked by a genuine blocker (build failures, missing dependencies, failing tests), output `<promise>ABORT</promise>`.
+7. **Run tests**: Run `npm run test` before committing. If blocked by a genuine blocker (build failures, missing dependencies, failing tests), output `<promise>ABORT</promise>`.
 
 **Ralph only works on existing issues assigned to the user.** It does NOT create new issues or subtasks.
 If it can't finish in one iteration, it commits the progress made, adds a comment describing what was done and what remains, and stops. The next iteration continues where it left off.
