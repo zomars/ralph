@@ -40,12 +40,13 @@ After picking your task, create or checkout the feature branch:
 
 ```bash
 git fetch origin
+DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')
 # Check if branch already exists on remote
 if git ls-remote --heads origin "ralph/<TASK-KEY>" | grep -q .; then
   git checkout "ralph/<TASK-KEY>"
   git pull origin "ralph/<TASK-KEY>"
 else
-  git checkout -b "ralph/<TASK-KEY>" origin/main
+  git checkout -b "ralph/<TASK-KEY>" "origin/$DEFAULT_BRANCH"
 fi
 ```
 
@@ -114,7 +115,7 @@ After committing, push and open (or update) a PR:
 git push -u origin "ralph/<TASK-KEY>"
 # Create PR if one doesn't exist yet
 if ! gh pr list --head "ralph/<TASK-KEY>" --json number --jq '.[0].number' 2>/dev/null | grep -q .; then
-  gh pr create --base main --head "ralph/<TASK-KEY>" --title "<TASK-KEY>: <summary>" --body "Implements <TASK-KEY>"
+  gh pr create --base "$DEFAULT_BRANCH" --head "ralph/<TASK-KEY>" --title "<TASK-KEY>: <summary>" --body "Implements <TASK-KEY>"
 fi
 ```
 
