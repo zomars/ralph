@@ -48,6 +48,7 @@ Fetch the chosen issue's full details using the backlog task detail tool.
 3.  **Transition**:
     - If ready for work: Transition to **"To Do"**.
     - If `needs-tests` (e.g. "Write tests for X"): Add label `needs-tests`.
+    - **Never transition to "Done" or "In Review"** — only the Reviewer can mark tasks complete. If a task appears already implemented, transition to "To Do" so it goes through the normal review pipeline.
 
 ## 5. Commit & Stop
 
