@@ -79,7 +79,7 @@ ralph_gated_loop() {
   local shutdown=0
 
   trap 'shutdown=1' INT TERM HUP
-  trap 'ralph_titlebar_cleanup; rm -f "$tmpfile" 2>/dev/null; rm -rf "$instance_slot" 2>/dev/null; ralph_cleanup_worktree "$work_dir"; kill -9 0 2>/dev/null' EXIT
+  trap 'ralph_titlebar_cleanup; rm -f "$tmpfile" 2>/dev/null; rm -rf "$instance_slot" 2>/dev/null; ralph_cleanup_worktree "$work_dir"; [[ -n "$child_pid" ]] && kill -9 -$child_pid 2>/dev/null; kill -9 0 2>/dev/null' EXIT
 
   die() {
     ralph_titlebar_cleanup
@@ -88,7 +88,7 @@ ralph_gated_loop() {
     tmpfile=""
     rm -rf "$instance_slot" 2>/dev/null
     ralph_cleanup_worktree "$work_dir"
-    [[ -n "$child_pid" ]] && kill -9 "$child_pid" 2>/dev/null
+    [[ -n "$child_pid" ]] && kill -9 -$child_pid 2>/dev/null
     kill -9 0 2>/dev/null
     exit 1
   }
@@ -127,22 +127,27 @@ ralph_gated_loop() {
     ralph_titlebar_update "${(U)agent_name} #$instance_num | Iteration $iteration | Tasks: $task_count | $(date '+%H:%M:%S')"
     echo "------- ${(U)agent_name} #$instance_num ITERATION $iteration ($task_count tasks) --------"
 
-    (cd "$work_dir" && claude \
-      --verbose \
-      --print \
-      --max-turns 100 \
-      --output-format stream-json \
-      --dangerously-skip-permissions \
-      --append-system-prompt "$(cat "$prompt_file")
+    setopt MONITOR
+    (
+      (cd "$work_dir" && claude \
+        --verbose \
+        --print \
+        --max-turns 100 \
+        --output-format stream-json \
+        --dangerously-skip-permissions \
+        --append-system-prompt "$(cat "$prompt_file")
 
 $(cat "$provider_instructions")" \
-      "You are RALPH_${(U)agent_key}, instance $instance_num. Your worktree is: $work_dir (project root: $project_dir). Execute your workflow now. Start with Step 1.") \
-    | grep --line-buffered '^{' \
-    | tee "$tmpfile" \
-    | jq --unbuffered -rj "$stream_text" &
+        "You are RALPH_${(U)agent_key}, instance $instance_num. Your worktree is: $work_dir (project root: $project_dir). Execute your workflow now. Start with Step 1.") \
+      | grep --line-buffered '^{' \
+      | tee "$tmpfile" \
+      | jq --unbuffered -rj "$stream_text"
+    ) &
     child_pid=$!
+    unsetopt MONITOR
     wait $child_pid 2>/dev/null || true
     [[ $shutdown -eq 1 ]] && die
+    kill -9 -$child_pid 2>/dev/null || true
     child_pid=""
 
     local result
