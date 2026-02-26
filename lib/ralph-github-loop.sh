@@ -103,8 +103,8 @@ ralph_github_loop() {
   local child_pid=""
   local shutdown=0
 
-  trap 'shutdown=1' INT TERM
-  trap 'ralph_titlebar_cleanup; rm -f "$tmpfile" 2>/dev/null; rm -rf "$instance_slot" 2>/dev/null; ralph_cleanup_worktree "$work_dir"' EXIT
+  trap 'shutdown=1' INT TERM HUP
+  trap 'ralph_titlebar_cleanup; rm -f "$tmpfile" 2>/dev/null; rm -rf "$instance_slot" 2>/dev/null; ralph_cleanup_worktree "$work_dir"; kill -9 0 2>/dev/null' EXIT
 
   die() {
     ralph_titlebar_cleanup
@@ -173,8 +173,8 @@ Start with Step 1 — checkout the branch and read feedback.") \
     | jq --unbuffered -rj "$stream_text" &
     child_pid=$!
     wait $child_pid 2>/dev/null || true
-    child_pid=""
     [[ $shutdown -eq 1 ]] && die
+    child_pid=""
 
     local result
     result=$(jq -r "$final_result" "$tmpfile")
