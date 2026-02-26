@@ -54,6 +54,32 @@ gh api -X POST "https://<site>.atlassian.net/rest/api/3/issueLink" \
 
 The implementer JQL automatically excludes tasks that are blocked by non-Done issues, so dependencies are enforced at the query level — no agent needs to manually check links.
 
+## Uploading Attachments
+
+The MCP tools do not support file attachments. Use `curl` to upload files (screenshots, logs, etc.) to a Jira issue:
+
+```bash
+curl -s -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
+  -X POST \
+  -H "X-Atlassian-Token: no-check" \
+  -F "file=@/path/to/screenshot.png" \
+  "$JIRA_BASE_URL/rest/api/3/issue/PROJ-123/attachments"
+```
+
+The response JSON contains an array of attachment objects. Extract the download URL to embed in comments:
+
+```bash
+# Upload and get the self URL
+ATTACHMENT_URL=$(curl -s -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
+  -X POST \
+  -H "X-Atlassian-Token: no-check" \
+  -F "file=@/path/to/screenshot.png" \
+  "$JIRA_BASE_URL/rest/api/3/issue/PROJ-123/attachments" \
+  | jq -r '.[0].content')
+```
+
+Then reference the attachment in a comment using markdown: `![description](url)`
+
 ## Cloud ID
 
 When calling Jira tools, use the `cloudId` from your Jira configuration. Call `mcp__jira__getAccessibleAtlassianResources` if you need to discover it.

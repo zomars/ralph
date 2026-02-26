@@ -109,10 +109,11 @@ If blocked by a genuine blocker (app won't start, critical crash, missing enviro
 After testing is complete:
 
 1. **Remove Label**: Remove `needs-tests`.
-2. **Add a comment** to the task with a full test report. Post all screenshots directly to the Jira comment as evidence:
+2. **Upload screenshots** as attachments to the Jira issue using `curl` (see provider instructions for the exact command). Collect the returned `content` URLs.
+3. **Add a comment** to the task with a full test report. Embed uploaded screenshot URLs as `![step description](url)`:
    - **Action**: Tested end-to-end
    - **Test Steps**: Numbered list of what you did (navigated to X, clicked Y, filled Z)
-   - **Screenshots**: Posted to the comment showing each step
+   - **Screenshots**: Embedded in the comment via `![description](attachment-url)` for each step
    - **Network Verification**: Summary of API calls verified (if applicable)
    - **Tests Written**: List of test files created/modified (if any), with test output
    - **Result**: PASS or FAIL with details
