@@ -80,6 +80,10 @@ ATTACHMENT_URL=$(curl -s -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
 
 Then reference the attachment in a comment using markdown: `![description](url)`
 
+## Rate Limiting
+
+If a Jira MCP tool returns a rate-limit error, wait 30 seconds (use `sleep 30` in bash) then retry **once**. If it fails again, output `<promise>ABORT</promise>` — do NOT keep retrying and waste turns.
+
 ## Cloud ID
 
-When calling Jira tools, use the `cloudId` from your Jira configuration. Call `mcp__jira__getAccessibleAtlassianResources` if you need to discover it.
+When calling Jira MCP tools, **always** pass `cloudId: "$JIRA_CLOUD_ID"` (available as an environment variable). Do NOT call `getAccessibleAtlassianResources` — the cloud ID is already known.

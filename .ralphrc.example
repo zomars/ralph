@@ -5,6 +5,7 @@ export RALPH_PROVIDER="jira"
 export JIRA_EMAIL="you@example.com"
 export JIRA_API_TOKEN="your-api-token"
 export JIRA_BASE_URL="https://yourorg.atlassian.net"
+export JIRA_CLOUD_ID="your-cloud-id"  # from getAccessibleAtlassianResources
 
 # File-specific (when RALPH_PROVIDER=file)
 # export RALPH_PRD_FILE="./prd.md"  # Optional, defaults to ./prd.md
