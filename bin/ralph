@@ -44,6 +44,19 @@ cmd_init() {
   fi
   cp "$RALPH_HOME/.ralphrc.example" ".ralphrc"
   echo "Created .ralphrc — edit it with your provider credentials."
+
+  if [[ ! -f ".mcp.json" ]]; then
+    cat > ".mcp.json" <<'MCPEOF'
+{
+  "mcpServers": {
+    "jira": {
+      "command": "ralph-jira-mcp"
+    }
+  }
+}
+MCPEOF
+    echo "Created .mcp.json — Jira MCP server configured."
+  fi
 }
 
 cmd_config() {

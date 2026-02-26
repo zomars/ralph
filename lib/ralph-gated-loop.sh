@@ -128,21 +128,23 @@ ralph_gated_loop() {
     echo "------- ${(U)agent_name} #$instance_num ITERATION $iteration ($task_count tasks) --------"
 
     setopt MONITOR
-    (
-      (cd "$work_dir" && claude \
-        --verbose \
-        --print \
-        --max-turns 100 \
-        --output-format stream-json \
-        --dangerously-skip-permissions \
-        --append-system-prompt "$(cat "$prompt_file")
+    {
+      (
+        (cd "$work_dir" && claude \
+          --verbose \
+          --print \
+          --max-turns 100 \
+          --output-format stream-json \
+          --dangerously-skip-permissions \
+          --append-system-prompt "$(cat "$prompt_file")
 
 $(cat "$provider_instructions")" \
-        "You are RALPH_${(U)agent_key}, instance $instance_num. Your worktree is: $work_dir (project root: $project_dir). Execute your workflow now. Start with Step 1.") \
-      | grep --line-buffered '^{' \
-      | tee "$tmpfile" \
-      | jq --unbuffered -rj "$stream_text"
-    ) &
+          "You are RALPH_${(U)agent_key}, instance $instance_num. Your worktree is: $work_dir (project root: $project_dir). Execute your workflow now. Start with Step 1.") \
+        | grep --line-buffered '^{' \
+        | tee "$tmpfile" \
+        | jq --unbuffered -rj "$stream_text"
+      ) </dev/null &
+    } 2>/dev/null
     child_pid=$!
     unsetopt MONITOR
     wait $child_pid 2>/dev/null || true

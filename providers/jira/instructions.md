@@ -2,6 +2,8 @@
 
 You are connected to Jira as the backlog provider. Use the following tools and conventions.
 
+**CRITICAL: Use ONLY `mcp__jira__*` tools (the local Jira server). NEVER use `mcp__claude_ai_jira__*` tools — those hit Anthropic's proxy which is rate-limited. Do NOT call `ToolSearch` for Jira tools — the exact tool names are listed below.**
+
 ## Tools
 
 - **Search tasks**: `mcp__jira__searchJiraIssuesUsingJql` — pass JQL string and set `maxResults=1`
@@ -10,6 +12,7 @@ You are connected to Jira as the backlog provider. Use the following tools and c
 - **Add comment**: `mcp__jira__addCommentToJiraIssue`
 - **Get transitions**: `mcp__jira__getTransitionsForJiraIssue` — always discover available transitions before transitioning
 - **Transition status**: `mcp__jira__transitionJiraIssue`
+- **Create issue link**: `mcp__jira__createIssueLink` — link two issues (e.g. "Blocks")
 
 ## Status Names
 
@@ -39,17 +42,8 @@ The plan MUST go in the description field — never in a comment.
 Use issue links to express task ordering. The **Planner** creates these when breaking down related work.
 
 **Create a "blocks" link** (task A blocks task B):
-```bash
-mcp__jira__editJiraIssue(issueIdOrKey: "PROJ-A", linkType: "Blocks", linkedIssueKey: "PROJ-B")
 ```
-
-Or use the REST API directly:
-```bash
-# A blocks B  →  outward "blocks", inward "is blocked by"
-gh api -X POST "https://<site>.atlassian.net/rest/api/3/issueLink" \
-  -f type[name]="Blocks" \
-  -f inwardIssue[key]="PROJ-B" \
-  -f outwardIssue[key]="PROJ-A"
+mcp__jira__createIssueLink(linkType: "Blocks", outwardIssueKey: "PROJ-A", inwardIssueKey: "PROJ-B")
 ```
 
 The implementer JQL automatically excludes tasks that are blocked by non-Done issues, so dependencies are enforced at the query level — no agent needs to manually check links.
@@ -83,7 +77,3 @@ Then reference the attachment in a comment using markdown: `![description](url)`
 ## Rate Limiting
 
 If a Jira MCP tool returns a rate-limit error, wait 30 seconds (use `sleep 30` in bash) then retry **once**. If it fails again, output `<promise>ABORT</promise>` — do NOT keep retrying and waste turns.
-
-## Cloud ID
-
-When calling Jira MCP tools, **always** pass `cloudId: "$JIRA_CLOUD_ID"` (available as an environment variable). Do NOT call `getAccessibleAtlassianResources` — the cloud ID is already known.

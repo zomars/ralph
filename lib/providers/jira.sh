@@ -6,7 +6,7 @@
 #   provider_check_tasks(query) — Returns task count for a given query
 
 # Required env vars for this provider
-PROVIDER_ENV_VARS=(JIRA_EMAIL JIRA_API_TOKEN JIRA_BASE_URL JIRA_CLOUD_ID)
+PROVIDER_ENV_VARS=(JIRA_EMAIL JIRA_API_TOKEN JIRA_BASE_URL)
 
 # Check if tasks exist for the given query
 # Args: $1 = JQL query string

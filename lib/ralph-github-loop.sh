@@ -159,21 +159,23 @@ ralph_github_loop() {
     echo "------- ${(U)agent_name} #$instance_num ITERATION $iteration ($pr_count PRs) --------"
 
     setopt MONITOR
-    (
-      (cd "$work_dir" && claude \
-        --verbose \
-        --print \
-        --max-turns 100 \
-        --output-format stream-json \
-        --dangerously-skip-permissions \
-        --append-system-prompt "$(cat "$prompt_file")" \
-        "You are RALPH_${(U)agent_key}, instance $instance_num. Your worktree is: $work_dir (project root: $project_dir). Fix this PR now:
+    {
+      (
+        (cd "$work_dir" && claude \
+          --verbose \
+          --print \
+          --max-turns 100 \
+          --output-format stream-json \
+          --dangerously-skip-permissions \
+          --append-system-prompt "$(cat "$prompt_file")" \
+          "You are RALPH_${(U)agent_key}, instance $instance_num. Your worktree is: $work_dir (project root: $project_dir). Fix this PR now:
 $target_pr
 Start with Step 1 — checkout the branch and read feedback.") \
-      | grep --line-buffered '^{' \
-      | tee "$tmpfile" \
-      | jq --unbuffered -rj "$stream_text"
-    ) &
+        | grep --line-buffered '^{' \
+        | tee "$tmpfile" \
+        | jq --unbuffered -rj "$stream_text"
+      ) </dev/null &
+    } 2>/dev/null
     child_pid=$!
     unsetopt MONITOR
     wait $child_pid 2>/dev/null || true

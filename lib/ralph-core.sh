@@ -37,6 +37,19 @@ ralph_setup_worktree() {
     git worktree add "$work_dir" -b "$branch_name" HEAD --quiet
   fi
 
+  # Restore tracked files that agents may have deleted (e.g. .mcp.json)
+  git -C "$work_dir" checkout HEAD -- .mcp.json 2>/dev/null || true
+
+  # Ensure the Jira MCP server is configured in the worktree
+  if command -v ralph-jira-mcp &>/dev/null && command -v jq &>/dev/null; then
+    if [[ -f "$work_dir/.mcp.json" ]]; then
+      jq '.mcpServers.jira //= {"command": "ralph-jira-mcp"}' "$work_dir/.mcp.json" \
+        > "$work_dir/.mcp.json.tmp" && mv "$work_dir/.mcp.json.tmp" "$work_dir/.mcp.json"
+    else
+      echo '{"mcpServers":{"jira":{"command":"ralph-jira-mcp"}}}' > "$work_dir/.mcp.json"
+    fi
+  fi
+
   echo "$work_dir"
 }
 
