@@ -263,7 +263,9 @@ ralph_save_session_log() {
 
   local timestamp
   timestamp=$(date '+%Y-%m-%dT%H:%M:%S')
-  cp "$tmpfile" "$log_dir/${timestamp}-${task_id}.log"
+  local log_path="$log_dir/${timestamp}-${task_id}.log"
+  cp "$tmpfile" "$log_path"
+  ralph_log "Session log: $log_path"
 }
 
 # ralph_extract_task_key <tmpfile>

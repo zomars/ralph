@@ -555,7 +555,17 @@ check_core() {
     assert_fail "Ralph saves session log when RALPH_LOG_DIR is set" "no .log files found"
   fi
 
-  # ─── Story 10: Extract task key from stream output ─────────────────────
+  # ─── Story 10: Session log path printed to stdout ────────────────────
+
+  local log_output
+  log_output=$(run_zsh "RALPH_LOG_DIR='$log_dir'; ralph_save_session_log '$test_tmpdir/session.json' 'test-agent' '1' 'TASK-2'")
+  if echo "$log_output" | grep -q "Session log:.*test-agent-1/.*TASK-2.log"; then
+    assert_ok "Ralph prints session log path before exiting"
+  else
+    assert_fail "Ralph prints session log path before exiting" "output: $log_output"
+  fi
+
+  # ─── Story 11: Extract task key from stream output ────────────────────
 
   echo '{"text":"Working on PROD-42 now"}' > "$test_tmpdir/taskkey.txt"
   result=$(run_zsh "ralph_extract_task_key '$test_tmpdir/taskkey.txt'")
