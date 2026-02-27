@@ -23,6 +23,7 @@ Agent commands (Jira-driven):
 
 GitHub commands:
   fixer             Run the Fixer agent (responds to PR review feedback)
+  merger            Run the Merger agent (auto-merges approved PRs)
 
 Agent options:
   --once            Run a single iteration, then exit
@@ -102,6 +103,7 @@ agent_display_name() {
     refactor)     echo "Refactorer" ;;
     documenter)   echo "Documenter" ;;
     fixer)        echo "Fixer" ;;
+    merger)       echo "Merger" ;;
   esac
 }
 
@@ -191,16 +193,16 @@ cmd_debug() {
   if [[ -z "$agent_key" ]]; then
     echo "Usage: ralph debug <agent> [instance] [-f|--follow] [-n|--lines N] [--raw]"
     echo ""
-    echo "Agents: planner, implementer, reviewer, tester, refactor, documenter, fixer"
+    echo "Agents: planner, implementer, reviewer, tester, refactor, documenter, fixer, merger"
     exit 1
   fi
 
   # Validate agent name
   case "$agent_key" in
-    planner|implementer|reviewer|tester|refactor|documenter|fixer) ;;
+    planner|implementer|reviewer|tester|refactor|documenter|fixer|merger) ;;
     *)
       echo "Unknown agent: $agent_key"
-      echo "Agents: planner, implementer, reviewer, tester, refactor, documenter, fixer"
+      echo "Agents: planner, implementer, reviewer, tester, refactor, documenter, fixer, merger"
       exit 1
       ;;
   esac
@@ -275,7 +277,7 @@ case "$subcmd" in
   validate)           exec "$RALPH_HOME/bin/validate-routing-impl" "$@" ;;
   planner|implementer|reviewer|tester|refactor|documenter)
                       cmd_agent "$subcmd" "$@" ;;
-  fixer)              cmd_github_agent "$subcmd" "$@" ;;
+  fixer|merger)       cmd_github_agent "$subcmd" "$@" ;;
   *)
     echo "Unknown command: $subcmd"
     echo "Run 'ralph help' for usage."

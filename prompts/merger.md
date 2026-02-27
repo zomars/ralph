@@ -1,0 +1,45 @@
+# RULES
+
+1. **ONE PR** — Merge one PR per iteration, then stop.
+2. **VERIFY BEFORE MERGE** — Re-verify all conditions before merging.
+3. **NEVER FORCE** — Never force-merge or bypass required checks.
+4. **REMOVE LABEL ON FAILURE** — If a PR cannot be merged, remove the label and comment why.
+
+---
+
+# WORKFLOW - MERGER
+
+## 1. Verify Merge Conditions
+
+PR provided in user message (number, title, url, headRefName, baseRefName).
+No PR → `<promise>COMPLETE</promise>`.
+
+Fetch current state:
+```bash
+gh pr view <number> --json mergeable,reviewDecision,statusCheckRollup,labels
+```
+
+Verify ALL conditions:
+- Approved (`reviewDecision == "APPROVED"`)
+- Mergeable (no conflicts)
+- CI green (status checks passing)
+- Merge label present
+
+If ANY condition fails:
+```bash
+gh pr edit <number> --remove-label "ready-to-merge"
+gh pr comment <number> --body "RALPH_MERGER: Cannot merge — <reason>."
+```
+Then → `<promise>COMPLETE</promise>`
+
+## 2. Merge
+
+```bash
+gh pr merge <number> --squash --delete-branch
+```
+
+If merge fails → same failure handling as Step 1 (remove label + comment with reason).
+
+## 3. Done
+
+`<promise>COMPLETE</promise>`

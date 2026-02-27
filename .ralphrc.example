@@ -20,3 +20,6 @@ export RALPH_POLL_INTERVAL=5
 
 # Worktree setup command — runs every agent start inside the worktree.
 # export RALPH_WORKTREE_SETUP="bash scripts/worktree-setup.sh && npm install"
+
+# Merger agent settings
+# export RALPH_MERGE_LABEL="ready-to-merge"  # Label that triggers merger (default: ready-to-merge)
