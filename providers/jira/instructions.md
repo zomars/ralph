@@ -47,7 +47,9 @@ Use issue links to express task ordering. The **Planner** creates these when bre
 mcp__jira__createIssueLink(linkType: "Blocks", outwardIssueKey: "PROJ-A", inwardIssueKey: "PROJ-B")
 ```
 
-The implementer JQL automatically excludes tasks that are blocked by non-Done issues, so dependencies are enforced at the query level — no agent needs to manually check links.
+The implementer JQL excludes tasks whose blockers are still in "To Do" or "In Progress". Once a blocker reaches "In Review" (has an open PR) or "Done", the dependent task becomes available.
+
+**Stacked PRs**: When starting a dependent task, the implementer checks `fields.issuelinks` for "is blocked by" links and looks for an active `ralph/<BLOCKER-KEY>` branch on the remote. If found, it branches from that branch instead of the default branch, and the PR targets the blocker's branch. After the blocker is merged, the reviewer rebases child PRs onto the default branch and updates their PR base.
 
 ## Uploading Attachments
 

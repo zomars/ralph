@@ -78,7 +78,28 @@ Based on your analysis, choose ONE path:
 
 - **Precondition**: Tests pass, code is clean, AND a test report with screenshots exists in comments.
 - **Action**: Comment "Verified. Tests passed. Browser testing evidence confirmed. Code looks good."
+- **Capture child PRs** (stacked PRs targeting this branch):
+  ```bash
+  CHILD_PRS=$(gh pr list --base "ralph/<TASK-KEY>" --json headRefName --jq '.[].headRefName')
+  ```
 - **Merge PR**: `gh pr merge "ralph/<TASK-KEY>" --squash --delete-branch`
+- **Rebase child PRs** onto the default branch:
+  ```bash
+  DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')
+  for child in $CHILD_PRS; do
+    git fetch origin "$child"
+    git checkout "$child"
+    git rebase "origin/$DEFAULT_BRANCH"
+    if [ $? -eq 0 ]; then
+      git push --force-with-lease origin "$child"
+      # Update child PR base to default branch
+      gh pr edit "$child" --base "$DEFAULT_BRANCH"
+    else
+      git rebase --abort
+      gh pr comment "$child" --body "Rebase onto $DEFAULT_BRANCH failed after parent branch ralph/<TASK-KEY> was merged. Manual rebase needed."
+    fi
+  done
+  ```
 - **Transition**: Move status to **"Done"**.
 
 ## 5. Commit & Stop

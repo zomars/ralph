@@ -12,7 +12,7 @@
 ## 1. Load Context
 
 1. Find assigned tasks using the backlog search tool with query:
-   `assignee = currentUser() AND status in ("To Do", "In Progress") AND (description is not EMPTY AND description !~ "TODO") AND (labels is EMPTY OR labels not in ("needs-tests", "tech-debt", "ralph-blocked", "needs-planning", "needs-input")) AND issueKey not in linkedIssuesOf("status != Done", "is blocked by") ORDER BY priority DESC`
+   `assignee = currentUser() AND status in ("To Do", "In Progress") AND (description is not EMPTY AND description !~ "TODO") AND (labels is EMPTY OR labels not in ("needs-tests", "tech-debt", "ralph-blocked", "needs-planning", "needs-input")) AND issueKey not in linkedIssuesOf("status in ('To Do', 'In Progress')", "is blocked by") ORDER BY priority DESC`
    **IMPORTANT**: Set `maxResults` to your instance number (from the user message, e.g. "instance 2" → `maxResults=2`). Default to `maxResults=1` if no instance number is given.
 2. Read last 10 RALPH commits.
 
@@ -41,14 +41,34 @@ After picking your task, create or checkout the feature branch:
 ```bash
 git fetch origin
 DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')
-# Check if branch already exists on remote
+# Check if branch already exists on remote (In Progress continuation)
 if git ls-remote --heads origin "ralph/<TASK-KEY>" | grep -q .; then
   git checkout "ralph/<TASK-KEY>"
   git pull origin "ralph/<TASK-KEY>"
 else
-  git checkout -b "ralph/<TASK-KEY>" "origin/$DEFAULT_BRANCH"
+  # Determine base branch: check for stacked PR dependency
+  BASE_BRANCH="$DEFAULT_BRANCH"
+  # Look at issue links for "is blocked by" relationships
+  # In the fetched issue details, check fields.issuelinks for inward links
+  # where type.inward == "is blocked by"
+  # For each blocker key, check if ralph/<BLOCKER-KEY> exists on remote
+  # If it does → that's our base branch (stacked PR)
+  # If multiple blockers have remote branches, use the first one found
+  # If none have remote branches (already merged) → use $DEFAULT_BRANCH
+
+  # Example logic (adapt to actual issuelinks data):
+  for BLOCKER_KEY in <BLOCKER-KEYS-FROM-ISSUELINKS>; do
+    if git ls-remote --heads origin "ralph/$BLOCKER_KEY" | grep -q .; then
+      BASE_BRANCH="ralph/$BLOCKER_KEY"
+      break
+    fi
+  done
+
+  git checkout -b "ralph/<TASK-KEY>" "origin/$BASE_BRANCH"
 fi
 ```
+
+**Stacked PRs**: If this task is blocked by another task that has an active `ralph/<BLOCKER-KEY>` branch, we branch from that instead of `$DEFAULT_BRANCH`. This enables parallel work — the dependent PR targets the blocker's branch, and after the blocker merges, the reviewer rebases the child.
 
 All work for this task happens on the `ralph/<TASK-KEY>` branch.
 
@@ -115,8 +135,9 @@ After committing, push and open (or update) a PR:
 ```bash
 git push -u origin "ralph/<TASK-KEY>"
 # Create PR if one doesn't exist yet
+# Use BASE_BRANCH from branch setup (blocker branch for stacked PRs, or DEFAULT_BRANCH)
 if ! gh pr list --head "ralph/<TASK-KEY>" --json number --jq '.[0].number' 2>/dev/null | grep -q .; then
-  gh pr create --base "$DEFAULT_BRANCH" --head "ralph/<TASK-KEY>" --title "<TASK-KEY>: <summary>" --body "Implements <TASK-KEY>"
+  gh pr create --base "$BASE_BRANCH" --head "ralph/<TASK-KEY>" --title "<TASK-KEY>: <summary>" --body "Implements <TASK-KEY>"
 fi
 ```
 
