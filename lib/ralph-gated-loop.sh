@@ -135,8 +135,11 @@ ralph_gated_loop() {
     # Write iteration marker to session log
     echo '{"type":"_ralph_marker","iteration":'$iteration',"timestamp":"'$(date -Iseconds)'","tasks":'$task_count'}' >> "$session_log"
 
-    local initial_message
-    initial_message="You are RALPH_${(U)agent_key}, instance $instance_num. Your worktree is: $work_dir (project root: $project_dir). Execute your workflow now. Start with Step 1."
+    local initial_message worktree_hint=""
+    if [[ -n "${RALPH_WORKTREE_SLOT:-}" ]]; then
+      worktree_hint=" Worktree slot: ${RALPH_WORKTREE_SLOT}. Your dev server port is configured in .env.local — do NOT hardcode port 3000."
+    fi
+    initial_message="You are RALPH_${(U)agent_key}, instance $instance_num. Your worktree is: $work_dir (project root: $project_dir).${worktree_hint} Execute your workflow now. Start with Step 1."
 
     local max_iteration_seconds="${RALPH_MAX_ITERATION_SECONDS:-1800}"
 

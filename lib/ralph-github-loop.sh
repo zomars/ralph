@@ -17,9 +17,13 @@ ralph_github_fetch_for_agent() {
 
 ralph_github_initial_message() {
   local agent_key="$1" instance_num="$2" work_dir="$3" project_dir="$4" target_pr="$5"
+  local worktree_hint=""
+  if [[ -n "${RALPH_WORKTREE_SLOT:-}" ]]; then
+    worktree_hint=" Worktree slot: ${RALPH_WORKTREE_SLOT}. Your dev server port is configured in .env.local — do NOT hardcode port 3000."
+  fi
   case "$agent_key" in
     fixer)
-      echo "You are RALPH_FIXER, instance $instance_num. Your worktree is: $work_dir (project root: $project_dir). Fix this PR now:
+      echo "You are RALPH_FIXER, instance $instance_num. Your worktree is: $work_dir (project root: $project_dir).${worktree_hint} Fix this PR now:
 $target_pr
 Start with Step 1 — checkout the branch and assess what needs fixing."
       ;;

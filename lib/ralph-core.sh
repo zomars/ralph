@@ -134,7 +134,8 @@ $(cat "$provider_instructions")"
 # ralph_setup_worktree <agent_key> <instance_num>
 # Creates (or reuses) a persistent git worktree for this agent instance.
 # Prints the worktree directory path to stdout.
-# If RALPH_WORKTREE_SETUP is set in .ralphrc, it runs every agent start.
+# Sets RALPH_WORKTREE_SLOT if the setup script assigns one.
+# Runs RALPH_WORKTREE_SETUP if set, otherwise auto-detects scripts/worktree-setup.sh.
 ralph_setup_worktree() {
   local agent_key="$1" instance_num="$2"
   local work_dir="/tmp/ralph-worktrees/${agent_key}-${instance_num}"
@@ -161,12 +162,22 @@ ralph_setup_worktree() {
     fi
   fi
 
-  # Run project-specific worktree setup if configured
-  if [[ -n "${RALPH_WORKTREE_SETUP:-}" ]]; then
-    ralph_log "Running worktree setup..." >&2
-    (cd "$work_dir" && eval "$RALPH_WORKTREE_SETUP") >&2 || {
+  # Run project-specific worktree setup.
+  # Priority: explicit RALPH_WORKTREE_SETUP > auto-detect scripts/worktree-setup.sh
+  local setup_cmd="${RALPH_WORKTREE_SETUP:-}"
+  if [[ -z "$setup_cmd" && -f "$work_dir/scripts/worktree-setup.sh" ]]; then
+    setup_cmd="bash scripts/worktree-setup.sh"
+  fi
+  if [[ -n "$setup_cmd" ]]; then
+    ralph_log "Running worktree setup: $setup_cmd" >&2
+    (cd "$work_dir" && eval "$setup_cmd") >&2 || {
       ralph_error "Worktree setup failed (exit $?). Continuing anyway."
     }
+  fi
+
+  # Export slot number if the setup script assigned one
+  if [[ -f "$work_dir/.worktree-slot" ]]; then
+    export RALPH_WORKTREE_SLOT="$(cat "$work_dir/.worktree-slot")"
   fi
 
   echo "$work_dir"
