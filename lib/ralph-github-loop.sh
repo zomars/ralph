@@ -3,9 +3,45 @@
 #
 # Usage: source this file, then call ralph_github_loop <agent_key> <agent_name>
 # Unlike ralph-gated-loop.sh, this does NOT use a Jira provider.
-# It gates on GitHub PRs needing attention (changes requested / unresolved comments).
+# It gates on GitHub PRs needing attention.
 
-ralph_fetch_github_prs() {
+# ─── Agent-specific dispatch helpers ─────────────────────────────────────────
+
+ralph_github_fetch_for_agent() {
+  case "$1" in
+    fixer)  ralph_fetch_fixer_prs ;;
+    merger) ralph_fetch_mergeable_prs ;;
+    *)      ralph_fetch_fixer_prs ;;
+  esac
+}
+
+ralph_github_initial_message() {
+  local agent_key="$1" instance_num="$2" work_dir="$3" project_dir="$4" target_pr="$5"
+  case "$agent_key" in
+    fixer)
+      echo "You are RALPH_FIXER, instance $instance_num. Your worktree is: $work_dir (project root: $project_dir). Fix this PR now:
+$target_pr
+Start with Step 1 — checkout the branch and assess what needs fixing."
+      ;;
+    merger)
+      echo "You are RALPH_MERGER, instance $instance_num. Merge this PR now (squash + delete-branch):
+$target_pr
+Start with Step 1 — verify merge conditions."
+      ;;
+  esac
+}
+
+ralph_github_no_work_label() {
+  case "$1" in
+    fixer)  echo "fixes" ;;
+    merger) echo "merges" ;;
+    *)      echo "work" ;;
+  esac
+}
+
+# ─── PR fetch functions ──────────────────────────────────────────────────────
+
+ralph_fetch_fixer_prs() {
   # Fetch PRs with unresolved review threads (catches both human and bot feedback).
   # Returns a JSON array of {number, title, url, headRefName} for PRs needing fixes.
   # Scoped to the current repo via gh's default repo detection.
@@ -52,8 +88,52 @@ ralph_fetch_github_prs() {
     | jq -s 'add | group_by(.number) | map(first | .hasConflicts = (.hasConflicts // false)) | sort_by(.number)'
 }
 
+# Backward compat alias
+ralph_fetch_github_prs() { ralph_fetch_fixer_prs; }
+
+ralph_fetch_mergeable_prs() {
+  # Fetch PRs labeled for merge that pass all conditions:
+  # authored by @me, approved, mergeable (no conflicts), CI green.
+  local repo label
+  repo=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null) || repo=""
+  if [[ -z "$repo" ]]; then
+    echo "[]"
+    return
+  fi
+  label="${RALPH_MERGE_LABEL:-ready-to-merge}"
+
+  gh api graphql -f query="
+    {
+      search(query: \"is:pr is:open author:@me label:\\\"$label\\\" repo:$repo\", type: ISSUE, first: 50) {
+        nodes {
+          ... on PullRequest {
+            number
+            title
+            url
+            headRefName
+            baseRefName
+            mergeable
+            reviewDecision
+            commits(last: 1) {
+              nodes {
+                commit {
+                  statusCheckRollup { state }
+                }
+              }
+            }
+          }
+        }
+      }
+    }" --jq '[.data.search.nodes[] |
+      select(.mergeable == "MERGEABLE") |
+      select(.reviewDecision == "APPROVED") |
+      select(.commits.nodes[0].commit.statusCheckRollup.state == "SUCCESS") |
+      {number, title, url, headRefName, baseRefName}
+    ]' 2>/dev/null || echo "[]"
+}
+
 ralph_check_github_prs() {
-  ralph_fetch_github_prs | jq 'length'
+  ralph_fetch_fixer_prs | jq 'length'
 }
 
 ralph_github_loop_once() {
@@ -88,10 +168,18 @@ ralph_github_loop() {
   # ─── Session log ────────────────────────────────────────────────────────
   local session_log="$instance_slot/session.log"
 
-  # ─── Worktree ───────────────────────────────────────────────────────────
+  # ─── Worktree (only for agents that modify code) ───────────────────────
   local project_dir="$PWD"
-  local work_dir
-  work_dir=$(ralph_setup_worktree "$agent_key" "$instance_num")
+  local work_dir uses_worktree=false
+  case "$agent_key" in
+    fixer)
+      work_dir=$(ralph_setup_worktree "$agent_key" "$instance_num")
+      uses_worktree=true
+      ;;
+    *)
+      work_dir="$PWD"
+      ;;
+  esac
 
   # Resolve paths
   local prompt_file poll_interval
@@ -113,10 +201,12 @@ ralph_github_loop() {
   local tmpfile=""
   local child_pid=""
   local shutdown=0
+  local no_work_label
+  no_work_label=$(ralph_github_no_work_label "$agent_key")
 
   trap 'shutdown=1; [[ -n "$child_pid" ]] && kill -INT -$child_pid 2>/dev/null' INT TERM HUP
   local last_task_key=""
-  trap 'ralph_save_session_log "$session_log" "$agent_key" "$instance_num" "$last_task_key"; ralph_titlebar_cleanup; rm -f "$tmpfile" 2>/dev/null; rm -rf "$instance_slot" 2>/dev/null; ralph_cleanup_worktree "$work_dir"; [[ -n "$child_pid" ]] && kill -9 -$child_pid 2>/dev/null' EXIT
+  trap 'ralph_save_session_log "$session_log" "$agent_key" "$instance_num" "$last_task_key"; ralph_titlebar_cleanup; rm -f "$tmpfile" 2>/dev/null; rm -rf "$instance_slot" 2>/dev/null; [[ "$uses_worktree" == "true" ]] && ralph_cleanup_worktree "$work_dir"; [[ -n "$child_pid" ]] && kill -9 -$child_pid 2>/dev/null' EXIT
 
   die() {
     ralph_save_session_log "$session_log" "$agent_key" "$instance_num" "$last_task_key"
@@ -125,7 +215,7 @@ ralph_github_loop() {
     rm -f "$tmpfile" 2>/dev/null
     tmpfile=""
     rm -rf "$instance_slot" 2>/dev/null
-    ralph_cleanup_worktree "$work_dir"
+    [[ "$uses_worktree" == "true" ]] && ralph_cleanup_worktree "$work_dir"
     [[ -n "$child_pid" ]] && kill -9 -$child_pid 2>/dev/null
     exit 1
   }
@@ -133,10 +223,10 @@ ralph_github_loop() {
   # ─── Early exit for --once with no work (before titlebar clears screen) ─
   if [[ "$run_once" == "true" ]]; then
     local early_prs early_count
-    early_prs=$(ralph_fetch_github_prs)
+    early_prs=$(ralph_github_fetch_for_agent "$agent_key")
     early_count=$(echo "$early_prs" | jq 'length')
     if [[ "$early_count" -lt "$instance_num" ]]; then
-      ralph_log "${agent_name} #$instance_num: No PRs needing fixes ($early_count found). Nothing to do."
+      ralph_log "${agent_name} #$instance_num: No PRs needing $no_work_label ($early_count found). Nothing to do."
       rm -rf "$instance_slot" 2>/dev/null
       exit 0
     fi
@@ -147,12 +237,12 @@ ralph_github_loop() {
   # ─── Main loop ──────────────────────────────────────────────────────────
   while true; do
     local pr_json pr_count
-    pr_json=$(ralph_fetch_github_prs)
+    pr_json=$(ralph_github_fetch_for_agent "$agent_key")
     pr_count=$(echo "$pr_json" | jq 'length')
 
     if [[ "$pr_count" -lt "$instance_num" ]]; then
       if [[ "$run_once" == "true" ]]; then
-        ralph_log "${agent_name} #$instance_num: No PRs needing fixes ($pr_count found). Nothing to do."
+        ralph_log "${agent_name} #$instance_num: No PRs needing $no_work_label ($pr_count found). Nothing to do."
         exit 0
       fi
       ralph_log "Not enough PRs for instance #$instance_num ($pr_count available). Sleeping ${poll_interval}s..."
@@ -174,9 +264,9 @@ ralph_github_loop() {
     echo '{"type":"_ralph_marker","iteration":'$iteration',"timestamp":"'$(date -Iseconds)'","prs":'$pr_count'}' >> "$session_log"
 
     local initial_message
-    initial_message="You are RALPH_${(U)agent_key}, instance $instance_num. Your worktree is: $work_dir (project root: $project_dir). Fix this PR now:
-$target_pr
-Start with Step 1 — checkout the branch and assess what needs fixing."
+    initial_message=$(ralph_github_initial_message "$agent_key" "$instance_num" "$work_dir" "$project_dir" "$target_pr")
+
+    local max_iteration_seconds="${RALPH_MAX_ITERATION_SECONDS:-1800}"
 
     setopt MONITOR
     {
@@ -189,10 +279,21 @@ Start with Step 1 — checkout the branch and assess what needs fixing."
     } 2>/dev/null
     child_pid=$!
     unsetopt MONITOR
+
+    # Watchdog: force-kill if Claude hangs after max_turns (e.g. orphaned dev servers)
+    local watchdog_pid=""
+    ( sleep "$max_iteration_seconds" && ralph_log "Iteration timeout (${max_iteration_seconds}s). Force-killing..." && kill -9 -$child_pid 2>/dev/null ) &
+    watchdog_pid=$!
+
     wait $child_pid 2>/dev/null || true
+    kill $watchdog_pid 2>/dev/null; wait $watchdog_pid 2>/dev/null || true
+    watchdog_pid=""
     [[ $shutdown -eq 1 ]] && die
     kill -9 -$child_pid 2>/dev/null || true
     child_pid=""
+
+    # Kill orphaned processes (dev servers, MCP servers) left in the worktree
+    ralph_cleanup_worktree_processes "$work_dir"
 
     local result
     result=$(jq -r "$final_result" "$tmpfile")

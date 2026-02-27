@@ -138,6 +138,8 @@ ralph_gated_loop() {
     local initial_message
     initial_message="You are RALPH_${(U)agent_key}, instance $instance_num. Your worktree is: $work_dir (project root: $project_dir). Execute your workflow now. Start with Step 1."
 
+    local max_iteration_seconds="${RALPH_MAX_ITERATION_SECONDS:-1800}"
+
     setopt MONITOR
     {
       (
@@ -149,10 +151,21 @@ ralph_gated_loop() {
     } 2>/dev/null
     child_pid=$!
     unsetopt MONITOR
+
+    # Watchdog: force-kill if Claude hangs after max_turns (e.g. orphaned dev servers)
+    local watchdog_pid=""
+    ( sleep "$max_iteration_seconds" && ralph_log "Iteration timeout (${max_iteration_seconds}s). Force-killing..." && kill -9 -$child_pid 2>/dev/null ) &
+    watchdog_pid=$!
+
     wait $child_pid 2>/dev/null || true
+    kill $watchdog_pid 2>/dev/null; wait $watchdog_pid 2>/dev/null || true
+    watchdog_pid=""
     [[ $shutdown -eq 1 ]] && die
     kill -9 -$child_pid 2>/dev/null || true
     child_pid=""
+
+    # Kill orphaned processes (dev servers, MCP servers) left in the worktree
+    ralph_cleanup_worktree_processes "$work_dir"
 
     local result
     result=$(jq -r "$final_result" "$tmpfile")

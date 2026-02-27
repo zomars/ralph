@@ -180,6 +180,26 @@ ralph_cleanup_worktree() {
   git worktree prune 2>/dev/null || true
 }
 
+# ralph_cleanup_worktree_processes <work_dir>
+# Kills any processes still referencing the worktree directory.
+# Catches orphaned dev servers, MCP servers, etc. that survive after Claude exits.
+ralph_cleanup_worktree_processes() {
+  local work_dir="$1"
+  [[ -z "$work_dir" ]] && return
+  local my_pid=$$
+  local pids=()
+  local pid
+  for pid in $(pgrep -f "$work_dir" 2>/dev/null); do
+    [[ "$pid" == "$my_pid" ]] && continue
+    pids+=("$pid")
+  done
+  (( ${#pids} == 0 )) && return
+  ralph_log "Cleaning up ${#pids} lingering process(es) in worktree..."
+  kill -TERM "${pids[@]}" 2>/dev/null
+  sleep 2
+  kill -9 "${pids[@]}" 2>/dev/null || true
+}
+
 # ─── Logging ──────────────────────────────────────────────────────────────────
 
 ralph_log() {
