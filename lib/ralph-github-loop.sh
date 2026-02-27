@@ -101,8 +101,9 @@ ralph_github_loop() {
   fi
 
   # ─── jq filters ─────────────────────────────────────────────────────────
-  local stream_text='select(.type == "assistant").message.content[]? | select(.type == "text").text // empty | gsub("\n"; "\r\n") | . + "\r\n\n"'
-  local final_result='select(.type == "result").result // empty'
+  ralph_get_jq_filters
+  local stream_text="$RALPH_STREAM_FILTER"
+  local final_result="$RALPH_RESULT_FILTER"
 
   # ─── State ──────────────────────────────────────────────────────────────
   local iteration=0
@@ -165,19 +166,15 @@ ralph_github_loop() {
     ralph_titlebar_update "${(U)agent_name} #$instance_num | Iteration $iteration | PRs: $pr_count | $(date '+%H:%M:%S')"
     echo "------- ${(U)agent_name} #$instance_num ITERATION $iteration ($pr_count PRs) --------"
 
+    local initial_message
+    initial_message="You are RALPH_${(U)agent_key}, instance $instance_num. Your worktree is: $work_dir (project root: $project_dir). Fix this PR now:
+$target_pr
+Start with Step 1 — checkout the branch and assess what needs fixing."
+
     setopt MONITOR
     {
       (
-        (cd "$work_dir" && claude \
-          --verbose \
-          --print \
-          --max-turns 100 \
-          --output-format stream-json \
-          --dangerously-skip-permissions \
-          --append-system-prompt "$(cat "$prompt_file")" \
-          "You are RALPH_${(U)agent_key}, instance $instance_num. Your worktree is: $work_dir (project root: $project_dir). Fix this PR now:
-$target_pr
-Start with Step 1 — checkout the branch and assess what needs fixing.") \
+        ralph_exec_llm "$agent_key" "$instance_num" "$work_dir" "$prompt_file" "" "$initial_message" \
         | grep --line-buffered '^{' \
         | tee "$tmpfile" \
         | jq --unbuffered -rj "$stream_text"

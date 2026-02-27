@@ -60,9 +60,14 @@ MCPEOF
 }
 
 cmd_config() {
-  echo "RALPH_HOME:     $RALPH_HOME"
-  echo "RALPH_PROVIDER: $RALPH_PROVIDER"
-  echo "RALPH_VERSION:  $RALPH_VERSION"
+  source "$RALPH_HOME/lib/ralph-core.sh"
+  local agent_cli
+  agent_cli=$(ralph_get_agent_cli)
+
+  echo "RALPH_HOME:           $RALPH_HOME"
+  echo "RALPH_PROVIDER:       $RALPH_PROVIDER"
+  echo "RALPH_MODEL_PROVIDER: $RALPH_MODEL_PROVIDER (cli: $agent_cli)"
+  echo "RALPH_VERSION:        $RALPH_VERSION"
   echo ""
   echo "Provider:       $RALPH_HOME/lib/providers/$RALPH_PROVIDER.sh"
   echo "Instructions:   $RALPH_HOME/providers/$RALPH_PROVIDER/instructions.md"

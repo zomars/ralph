@@ -1,6 +1,9 @@
 # Backlog provider (jira, file)
 export RALPH_PROVIDER="jira"
 
+# Model provider (claude, gemini, codex)
+export RALPH_MODEL_PROVIDER="claude"
+
 # Jira-specific (when RALPH_PROVIDER=jira)
 export JIRA_EMAIL="you@example.com"
 export JIRA_API_TOKEN="your-api-token"
