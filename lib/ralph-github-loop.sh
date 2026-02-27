@@ -300,7 +300,7 @@ ralph_github_loop() {
     ralph_cleanup_worktree_processes "$work_dir"
 
     local result
-    result=$(jq -r "$final_result" "$tmpfile")
+    result=$(jq -r "$final_result" "$tmpfile" 2>/dev/null || true)
     last_task_key=$(ralph_extract_task_key "$tmpfile")
 
     rm -f "$tmpfile"
