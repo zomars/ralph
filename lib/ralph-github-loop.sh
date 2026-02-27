@@ -115,10 +115,11 @@ ralph_github_loop() {
   local shutdown=0
 
   trap 'shutdown=1; [[ -n "$child_pid" ]] && kill -INT -$child_pid 2>/dev/null' INT TERM HUP
-  trap 'ralph_save_session_log "$session_log" "$agent_key" "$instance_num"; ralph_titlebar_cleanup; rm -f "$tmpfile" 2>/dev/null; rm -rf "$instance_slot" 2>/dev/null; ralph_cleanup_worktree "$work_dir"; [[ -n "$child_pid" ]] && kill -9 -$child_pid 2>/dev/null' EXIT
+  local last_task_key=""
+  trap 'ralph_save_session_log "$session_log" "$agent_key" "$instance_num" "$last_task_key"; ralph_titlebar_cleanup; rm -f "$tmpfile" 2>/dev/null; rm -rf "$instance_slot" 2>/dev/null; ralph_cleanup_worktree "$work_dir"; [[ -n "$child_pid" ]] && kill -9 -$child_pid 2>/dev/null' EXIT
 
   die() {
-    ralph_save_session_log "$session_log" "$agent_key" "$instance_num"
+    ralph_save_session_log "$session_log" "$agent_key" "$instance_num" "$last_task_key"
     ralph_titlebar_cleanup
     printf "\nShutting down.\n"
     rm -f "$tmpfile" 2>/dev/null
@@ -195,6 +196,7 @@ Start with Step 1 — checkout the branch and assess what needs fixing."
 
     local result
     result=$(jq -r "$final_result" "$tmpfile")
+    last_task_key=$(ralph_extract_task_key "$tmpfile")
 
     rm -f "$tmpfile"
     tmpfile=""
