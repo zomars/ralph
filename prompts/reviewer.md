@@ -41,13 +41,18 @@ Fetch the chosen issue's full details using the backlog task detail tool.
     git checkout "ralph/<TASK-KEY>"
     git pull origin "ralph/<TASK-KEY>"
     ```
-3.  **Run Tests**: Execute `npm run test` (or equivalent).
+3.  **Draft guard**: Verify the PR is still in draft (not yet reviewed):
+    ```bash
+    PR_IS_DRAFT=$(gh pr view "ralph/<TASK-KEY>" --json isDraft --jq '.isDraft')
+    ```
+    If `isDraft` is `false` → this PR was already reviewed. Release the branch and output `<promise>COMPLETE</promise>`.
+4.  **Run Tests**: Execute `npm run test` (or equivalent).
     - If tests FAIL: Reject immediately.
-4.  **Analyze Code**: Read the changes.
+5.  **Analyze Code**: Read the changes.
     - **Logic Check**: Is the implementation correct based on the ticket description?
     - **Code Quality**: Is the code clean? Any obvious bad patterns?
     - **Test Coverage**: Are there new tests for the new feature?
-5.  **Verify Testing Evidence**: Read the issue comments looking for a **test report from the Tester agent**.
+6.  **Verify Testing Evidence**: Read the issue comments looking for a **test report from the Tester agent**.
     - A valid test report MUST include: numbered test steps, screenshots as evidence, and a PASS/FAIL result.
     - If no test report exists, or the report lacks screenshots/evidence, the task is NOT ready for approval — route to Path B.
 
@@ -70,20 +75,27 @@ Based on your analysis, choose ONE path:
 ### Path C: MESSY CODE (Functional but Ugly)
 
 - **Action**: Comment "Functional, but needs refactoring."
-- **Label**: Add `tech-debt`.
-- **Transition**: Move status to **"Done"**. (Refactorer will pick it up later).
+- **Label**: Add `tech-debt` label to the Jira issue.
+- **Mark ready + label for merge**:
+  ```bash
+  gh pr ready "ralph/<TASK-KEY>"
+  gh label create ready-to-merge --description "Reviewer-approved, safe to merge" --color 0E8A16 --force
+  gh pr edit "ralph/<TASK-KEY>" --add-label "ready-to-merge"
+  ```
+- **Transition**: Keep status at **"In Review"** — the merger will move it to "Done" after merging.
   - _Note_: If it's really bad, use Path A instead.
 
 ### Path D: APPROVE (Good to Go)
 
 - **Precondition**: Tests pass, code is clean, AND a test report with screenshots exists in comments.
 - **Action**: Comment "Verified. Tests passed. Browser testing evidence confirmed. Code looks good."
-- **Label for merge**: Ensure the label exists, then apply it to the PR:
+- **Mark ready + label for merge**:
   ```bash
+  gh pr ready "ralph/<TASK-KEY>"
   gh label create ready-to-merge --description "Reviewer-approved, safe to merge" --color 0E8A16 --force
   gh pr edit "ralph/<TASK-KEY>" --add-label "ready-to-merge"
   ```
-- **Transition**: Move status to **"Done"**.
+- **Transition**: Keep status at **"In Review"** — the merger will move it to "Done" after merging.
 
 ## 5. Commit & Stop
 

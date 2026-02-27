@@ -137,7 +137,7 @@ git push -u origin "ralph/<TASK-KEY>"
 # Create PR if one doesn't exist yet
 # Use BASE_BRANCH from branch setup (blocker branch for stacked PRs, or DEFAULT_BRANCH)
 if ! gh pr list --head "ralph/<TASK-KEY>" --json number --jq '.[0].number' 2>/dev/null | grep -q .; then
-  gh pr create --base "$BASE_BRANCH" --head "ralph/<TASK-KEY>" --title "<TASK-KEY>: <summary>" --body "Implements <TASK-KEY>"
+  gh pr create --draft --base "$BASE_BRANCH" --head "ralph/<TASK-KEY>" --title "<TASK-KEY>: <summary>" --body "Implements <TASK-KEY>"
 fi
 ```
 

@@ -39,6 +39,17 @@ gh pr merge <number> --squash --delete-branch
 
 If merge fails → same failure handling as Step 1 (remove label + comment with reason).
 
-## 3. Done
+## 3. Transition Jira to Done
+
+After a successful merge, transition the Jira issue:
+
+1. Extract the task key from the branch name (strip the `ralph/` prefix from `headRefName`).
+2. Get available transitions for the issue using the backlog transition tool.
+3. Transition the issue to **"Done"**.
+4. Add a comment: `"RALPH_MERGER: Merged PR #<number> into <baseRefName>."`
+
+If the transition fails, log it but do NOT treat it as a merge failure — the code is already merged.
+
+## 4. Done
 
 `<promise>COMPLETE</promise>`

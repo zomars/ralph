@@ -118,6 +118,7 @@ ralph_fetch_mergeable_prs() {
             url
             headRefName
             baseRefName
+            isDraft
             mergeable
             commits(last: 1) {
               nodes {
@@ -130,6 +131,7 @@ ralph_fetch_mergeable_prs() {
         }
       }
     }" --jq '[.data.search.nodes[] |
+      select(.isDraft == false) |
       select(.mergeable == "MERGEABLE") |
       select(.commits.nodes[0].commit.statusCheckRollup.state == "SUCCESS") |
       {number, title, url, headRefName, baseRefName}
@@ -176,7 +178,7 @@ ralph_github_loop() {
   local project_dir="$PWD"
   local work_dir uses_worktree=false
   case "$agent_key" in
-    fixer)
+    fixer|merger)
       work_dir=$(ralph_setup_worktree "$agent_key" "$instance_num")
       uses_worktree=true
       ;;
@@ -186,9 +188,17 @@ ralph_github_loop() {
   esac
 
   # Resolve paths
-  local prompt_file poll_interval
+  local prompt_file poll_interval provider_instructions=""
   prompt_file="$(ralph_get_prompt "$agent_key")"
   poll_interval="$(ralph_get_poll_interval)"
+
+  # Load provider instructions for agents that need Jira access (e.g. merger)
+  case "$agent_key" in
+    merger)
+      source "$RALPH_HOME/lib/providers/${RALPH_PROVIDER}.sh"
+      provider_instructions="$(ralph_get_provider_instructions)"
+      ;;
+  esac
 
   if [[ ! -f "$prompt_file" ]]; then
     ralph_error "Prompt not found: $prompt_file"
@@ -275,7 +285,7 @@ ralph_github_loop() {
     setopt MONITOR
     {
       (
-        ralph_exec_llm "$agent_key" "$instance_num" "$work_dir" "$prompt_file" "" "$initial_message" \
+        ralph_exec_llm "$agent_key" "$instance_num" "$work_dir" "$prompt_file" "$provider_instructions" "$initial_message" \
         | grep --line-buffered '^{' \
         | tee "$tmpfile" | tee -a "$session_log" \
         | jq --unbuffered -rj "$stream_text"
