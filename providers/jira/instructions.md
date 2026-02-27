@@ -14,6 +14,7 @@ You are connected to Jira as the backlog provider. Use the following tools and c
 - **Transition status**: `mcp__jira__transitionJiraIssue`
 - **Create issue link**: `mcp__jira__createIssueLink` — link two issues (e.g. "Blocks")
 - **Create remote link**: `mcp__jira__createRemoteLink` — attach an external URL (e.g. GitHub PR) to an issue
+- **Add attachment**: `mcp__jira__addAttachmentToJiraIssue` — upload a file (screenshot, log, etc.) to an issue
 
 ## Status Names
 
@@ -53,29 +54,7 @@ The implementer JQL excludes tasks whose blockers are still in "To Do" or "In Pr
 
 ## Uploading Attachments
 
-The MCP tools do not support file attachments. Use `curl` to upload files (screenshots, logs, etc.) to a Jira issue:
-
-```bash
-curl -s -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
-  -X POST \
-  -H "X-Atlassian-Token: no-check" \
-  -F "file=@/path/to/screenshot.png" \
-  "$JIRA_BASE_URL/rest/api/3/issue/PROJ-123/attachments"
-```
-
-The response JSON contains an array of attachment objects. Extract the download URL to embed in comments:
-
-```bash
-# Upload and get the self URL
-ATTACHMENT_URL=$(curl -s -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
-  -X POST \
-  -H "X-Atlassian-Token: no-check" \
-  -F "file=@/path/to/screenshot.png" \
-  "$JIRA_BASE_URL/rest/api/3/issue/PROJ-123/attachments" \
-  | jq -r '.[0].content')
-```
-
-Then reference the attachment in a comment using markdown: `![description](url)`
+Use `mcp__jira__addAttachmentToJiraIssue` to upload files (screenshots, logs, etc.) to a Jira issue. The response includes the `content` URL for each attachment — use it to embed in comments with markdown: `![description](url)`
 
 ## Rate Limiting
 

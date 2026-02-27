@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { readFile } from "node:fs/promises";
+import { basename } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -409,6 +411,54 @@ server.tool(
         object: { url, title },
       });
       return ok({ success: true, key: issueIdOrKey, id: res?.id });
+    } catch (e) {
+      return err(e.message);
+    }
+  }
+);
+
+// 9. Add attachment
+server.tool(
+  "addAttachmentToJiraIssue",
+  "Upload a file (screenshot, log, etc.) as an attachment to a Jira issue",
+  {
+    issueIdOrKey: z.string().describe("Issue key (e.g. PROJ-123)"),
+    filePath: z.string().describe("Absolute path to the file to upload"),
+  },
+  async ({ issueIdOrKey, filePath }) => {
+    try {
+      if (DRY_RUN) {
+        console.error(`[dry-run] POST /rest/api/3/issue/${issueIdOrKey}/attachments file=${filePath}`);
+        return ok({ _dryRun: true });
+      }
+
+      const fileData = await readFile(filePath);
+      const fileName = basename(filePath);
+      const blob = new Blob([fileData]);
+
+      const form = new FormData();
+      form.append("file", blob, fileName);
+
+      const res = await fetch(
+        `${BASE_URL}/rest/api/3/issue/${issueIdOrKey}/attachments`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Basic ${AUTH}`,
+            "X-Atlassian-Token": "no-check",
+          },
+          body: form,
+        }
+      );
+
+      const text = await res.text();
+      if (!res.ok) throw new Error(`Jira ${res.status}: ${text}`);
+      const data = text ? JSON.parse(text) : null;
+      return ok({
+        success: true,
+        key: issueIdOrKey,
+        attachments: data?.map((a) => ({ id: a.id, filename: a.filename, content: a.content })),
+      });
     } catch (e) {
       return err(e.message);
     }
