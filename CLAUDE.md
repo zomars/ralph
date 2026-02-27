@@ -13,6 +13,9 @@ npm link                        # Install globally
 ralph planner --once            # Run one iteration of an agent
 ralph implementer --afk         # Run agent in continuous poll loop (default)
 ralph fixer --once              # GitHub PR fixer agent
+ralph debug implementer         # Show last 200 lines of agent output
+ralph debug implementer -f      # Live tail a running agent
+ralph debug implementer 2 --raw # Raw JSON from instance 2
 ralph validate --check-all      # Validate routing rules (run after routing changes)
 ralph init                      # Create .ralphrc in CWD
 ralph config                    # Show current config

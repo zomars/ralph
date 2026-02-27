@@ -28,6 +28,12 @@ Agent options:
   --once            Run a single iteration, then exit
   --afk             Run in AFK loop mode (default)
 
+Debugging:
+  debug <agent> [N] Tail a running agent's output (default: instance 1)
+    -f, --follow    Live tail (like tail -f)
+    -n, --lines N   Number of lines to show (default: 200)
+    --raw           Show raw JSON instead of rendered text
+
 Utility commands:
   validate          Run routing validation (accepts --matrix, --check-prompts, --check-loops, --check-all)
   init              Create a .ralphrc file in the current directory
@@ -157,12 +163,113 @@ cmd_github_agent() {
   fi
 }
 
+cmd_debug() {
+  # Parse args: ralph debug <agent> [instance] [-f|--follow] [-n|--lines N] [--raw]
+  local agent_key="" instance_num=1 follow=false raw=false lines=200
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -f|--follow) follow=true; shift ;;
+      --raw) raw=true; shift ;;
+      -n|--lines) lines="$2"; shift 2 ;;
+      -*)
+        echo "Unknown option: $1"
+        echo "Usage: ralph debug <agent> [instance] [-f|--follow] [-n|--lines N] [--raw]"
+        exit 1
+        ;;
+      *)
+        if [[ -z "$agent_key" ]]; then
+          agent_key="$1"
+        else
+          instance_num="$1"
+        fi
+        shift
+        ;;
+    esac
+  done
+
+  if [[ -z "$agent_key" ]]; then
+    echo "Usage: ralph debug <agent> [instance] [-f|--follow] [-n|--lines N] [--raw]"
+    echo ""
+    echo "Agents: planner, implementer, reviewer, tester, refactor, documenter, fixer"
+    exit 1
+  fi
+
+  # Validate agent name
+  case "$agent_key" in
+    planner|implementer|reviewer|tester|refactor|documenter|fixer) ;;
+    *)
+      echo "Unknown agent: $agent_key"
+      echo "Agents: planner, implementer, reviewer, tester, refactor, documenter, fixer"
+      exit 1
+      ;;
+  esac
+
+  source "$RALPH_HOME/lib/ralph-core.sh"
+  ralph_get_jq_filters
+  local stream_text="$RALPH_STREAM_FILTER"
+
+  # Try live session log first
+  local session_log="/tmp/ralph-${agent_key}/${instance_num}/session.log"
+  local log_file=""
+
+  if [[ -f "$session_log" ]]; then
+    log_file="$session_log"
+  elif [[ -n "${RALPH_LOG_DIR:-}" ]]; then
+    # Fallback: latest saved session log
+    local log_dir="${RALPH_LOG_DIR%/}/${agent_key}-${instance_num}"
+    if [[ -d "$log_dir" ]]; then
+      log_file=$(ls -t "$log_dir"/*-session.log 2>/dev/null | head -1)
+    fi
+  fi
+
+  if [[ -z "$log_file" ]]; then
+    echo "No session log found for ${agent_key} #${instance_num}."
+    echo ""
+    echo "Checked:"
+    echo "  Live:  $session_log"
+    [[ -n "${RALPH_LOG_DIR:-}" ]] && echo "  Saved: ${RALPH_LOG_DIR%/}/${agent_key}-${instance_num}/"
+    [[ -z "${RALPH_LOG_DIR:-}" ]] && echo "  Tip:   Set RALPH_LOG_DIR in .ralphrc to persist logs across sessions."
+    exit 1
+  fi
+
+  local source_label="live"
+  [[ "$log_file" != "$session_log" ]] && source_label="saved"
+  echo "── ${agent_key} #${instance_num} ($source_label: $log_file) ──"
+  echo ""
+
+  _debug_render "$log_file" "$stream_text" "$follow" "$raw" "$lines"
+}
+
+_debug_render() {
+  local log_file="$1" stream_text="$2" follow="$3" raw="$4" lines="$5"
+
+  if [[ "$follow" == "true" ]]; then
+    if [[ "$raw" == "true" ]]; then
+      tail -f "$log_file"
+    else
+      tail -f "$log_file" \
+        | grep --line-buffered '^{' \
+        | jq --unbuffered -rj "$stream_text"
+    fi
+  else
+    if [[ "$raw" == "true" ]]; then
+      tail -n "$lines" "$log_file"
+    else
+      grep '^{' "$log_file" \
+        | jq -rj "$stream_text" \
+        | tail -n "$lines"
+    fi
+  fi
+}
+
 subcmd="${1:-}"
 [[ -n "$subcmd" ]] && shift
 
 case "$subcmd" in
   init)               cmd_init ;;
   config)             cmd_config ;;
+  debug)              cmd_debug "$@" ;;
   version|-v)         cmd_version ;;
   help|--help|-h|"")  usage ;;
   validate)           exec "$RALPH_HOME/bin/validate-routing-impl" "$@" ;;

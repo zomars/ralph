@@ -43,6 +43,9 @@ ralph_gated_loop() {
   instance_num=$(ralph_claim_instance "$agent_key")
   instance_slot="/tmp/ralph-${agent_key}/${instance_num}"
 
+  # ─── Session log ────────────────────────────────────────────────────────
+  local session_log="$instance_slot/session.log"
+
   # ─── Worktree ───────────────────────────────────────────────────────────
   local project_dir="$PWD"
   local work_dir
@@ -80,9 +83,10 @@ ralph_gated_loop() {
   local shutdown=0
 
   trap 'shutdown=1; [[ -n "$child_pid" ]] && kill -INT -$child_pid 2>/dev/null' INT TERM HUP
-  trap 'ralph_titlebar_cleanup; rm -f "$tmpfile" 2>/dev/null; rm -rf "$instance_slot" 2>/dev/null; ralph_cleanup_worktree "$work_dir"; [[ -n "$child_pid" ]] && kill -9 -$child_pid 2>/dev/null; kill -9 0 2>/dev/null' EXIT
+  trap 'ralph_save_session_log "$session_log" "$agent_key" "$instance_num"; ralph_titlebar_cleanup; rm -f "$tmpfile" 2>/dev/null; rm -rf "$instance_slot" 2>/dev/null; ralph_cleanup_worktree "$work_dir"; [[ -n "$child_pid" ]] && kill -9 -$child_pid 2>/dev/null' EXIT
 
   die() {
+    ralph_save_session_log "$session_log" "$agent_key" "$instance_num"
     ralph_titlebar_cleanup
     printf "\nShutting down.\n"
     rm -f "$tmpfile" 2>/dev/null
@@ -90,7 +94,6 @@ ralph_gated_loop() {
     rm -rf "$instance_slot" 2>/dev/null
     ralph_cleanup_worktree "$work_dir"
     [[ -n "$child_pid" ]] && kill -9 -$child_pid 2>/dev/null
-    kill -9 0 2>/dev/null
     exit 1
   }
 
@@ -128,6 +131,9 @@ ralph_gated_loop() {
     ralph_titlebar_update "${(U)agent_name} #$instance_num | Iteration $iteration | Tasks: $task_count | $(date '+%H:%M:%S')"
     echo "------- ${(U)agent_name} #$instance_num ITERATION $iteration ($task_count tasks) --------"
 
+    # Write iteration marker to session log
+    echo '{"type":"_ralph_marker","iteration":'$iteration',"timestamp":"'$(date -Iseconds)'","tasks":'$task_count'}' >> "$session_log"
+
     local initial_message
     initial_message="You are RALPH_${(U)agent_key}, instance $instance_num. Your worktree is: $work_dir (project root: $project_dir). Execute your workflow now. Start with Step 1."
 
@@ -136,7 +142,7 @@ ralph_gated_loop() {
       (
         ralph_exec_llm "$agent_key" "$instance_num" "$work_dir" "$prompt_file" "$provider_instructions" "$initial_message" \
         | grep --line-buffered '^{' \
-        | tee "$tmpfile" \
+        | tee "$tmpfile" | tee -a "$session_log" \
         | jq --unbuffered -rj "$stream_text"
       ) </dev/null &
     } 2>/dev/null
@@ -149,11 +155,6 @@ ralph_gated_loop() {
 
     local result
     result=$(jq -r "$final_result" "$tmpfile")
-
-    # Persist session log before deleting tmpfile
-    local task_key
-    task_key=$(ralph_extract_task_key "$tmpfile")
-    ralph_save_session_log "$tmpfile" "$agent_key" "$instance_num" "${task_key:-unknown}"
 
     rm -f "$tmpfile"
     tmpfile=""
