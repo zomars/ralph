@@ -41,11 +41,11 @@ Fetch the chosen issue's full details using the backlog task detail tool.
     git checkout "ralph/<TASK-KEY>"
     git pull origin "ralph/<TASK-KEY>"
     ```
-3.  **Draft guard**: Verify the PR is still in draft (not yet reviewed):
+3.  **Already-reviewed guard**: Check if this PR was already approved:
     ```bash
-    PR_IS_DRAFT=$(gh pr view "ralph/<TASK-KEY>" --json isDraft --jq '.isDraft')
+    HAS_MERGE_LABEL=$(gh pr view "ralph/<TASK-KEY>" --json labels --jq '.labels[].name' | grep -c 'ready-to-merge' || true)
     ```
-    If `isDraft` is `false` → this PR was already reviewed. Release the branch and output `<promise>COMPLETE</promise>`.
+    If `HAS_MERGE_LABEL` is not `0` → already reviewed, waiting for merge. Release the branch and output `<promise>COMPLETE</promise>`.
 4.  **Run Tests**: Execute `npm run test` (or equivalent).
     - If tests FAIL: Reject immediately.
 5.  **Analyze Code**: Read the changes.
