@@ -109,16 +109,16 @@ If blocked by a genuine blocker (app won't start, critical crash, missing enviro
 After testing is complete:
 
 1. **Remove Label**: Remove `needs-tests`.
-2. **Upload screenshots** as attachments to the Jira issue using `curl` (see provider instructions for the exact command). Collect the returned `content` URLs.
-3. **Add a comment** to the task with a full test report. Embed uploaded screenshot URLs as `![step description](url)`:
+2. **Upload screenshots** as attachments to the Jira issue. Collect the returned `content` URLs from each upload response.
+3. **Add a comment** to the task with a full test report. Reference each screenshot on its own standalone line as `![step description](content-url)` — each renders inline automatically:
    - **Action**: Tested end-to-end
    - **Test Steps**: Numbered list of what you did (navigated to X, clicked Y, filled Z)
-   - **Screenshots**: Embedded in the comment via `![description](attachment-url)` for each step
+   - **Screenshots**: Each on its own line as `![description](content-url)` so it renders inline
    - **Network Verification**: Summary of API calls verified (if applicable)
    - **Tests Written**: List of test files created/modified (if any), with test output
    - **Result**: PASS or FAIL with details
    - If **FAIL**: Describe exactly what went wrong, expected vs actual behavior, and include the screenshot showing the failure.
-3. **Transition**: Transition to **"In Review"** (so Reviewer can verify the test results).
+4. **Transition**: Transition to **"In Review"** (so Reviewer can verify the test results).
 
 Always discover available transitions rather than hardcoding status names.
 

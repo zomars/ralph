@@ -70,8 +70,18 @@ function blockToAdf(token) {
         content: inlineToAdf(token.tokens),
       };
 
-    case "paragraph":
+    case "paragraph": {
+      const imgs = token.tokens.filter(t => t.type === "image");
+      const rest = token.tokens.filter(t => t.type !== "image" && !(t.type === "text" && !t.raw.trim()));
+      if (imgs.length > 0 && rest.length === 0) {
+        return imgs.map(img => ({
+          type: "mediaSingle",
+          attrs: { layout: "center" },
+          content: [{ type: "media", attrs: { type: "external", url: img.href } }],
+        }));
+      }
       return { type: "paragraph", content: inlineToAdf(token.tokens) };
+    }
 
     case "code":
       return {
