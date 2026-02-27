@@ -17,6 +17,7 @@ ralph_fetch_github_prs() {
   fi
 
   # Single GraphQL query fetches everything the fixer needs.
+  # Selects PRs with unresolved review threads OR merge conflicts.
   # We also merge in PRs with formal "changes requested" via gh pr list
   # (those may not have unresolved threads yet).
   local graphql_prs cr_prs
@@ -29,20 +30,26 @@ ralph_fetch_github_prs() {
             title
             url
             headRefName
+            mergeable
             reviewThreads(first: 100) {
               nodes { isResolved }
             }
           }
         }
       }
-    }" --jq '[.data.search.nodes[] | select(.reviewThreads.nodes | map(select(.isResolved == false)) | length > 0) | {number, title, url, headRefName}]' 2>/dev/null) || graphql_prs="[]"
+    }" --jq '[.data.search.nodes[] |
+      { hasUnresolvedThreads: (.reviewThreads.nodes | map(select(.isResolved == false)) | length > 0),
+        hasConflicts: (.mergeable == "CONFLICTING") } as $flags |
+      select($flags.hasUnresolvedThreads or $flags.hasConflicts) |
+      {number, title, url, headRefName, hasConflicts: $flags.hasConflicts}
+    ]' 2>/dev/null) || graphql_prs="[]"
 
   cr_prs=$(gh pr list --author "@me" --search "review:changes_requested" \
     --json number,title,url,headRefName 2>/dev/null) || cr_prs="[]"
 
-  # Merge and deduplicate by PR number, preferring graphql_prs entries
+  # Merge and deduplicate by PR number, preferring graphql_prs entries (which carry hasConflicts)
   echo "$graphql_prs"$'\n'"$cr_prs" \
-    | jq -s 'add | group_by(.number) | map(first) | sort_by(.number)'
+    | jq -s 'add | group_by(.number) | map(first | .hasConflicts = (.hasConflicts // false)) | sort_by(.number)'
 }
 
 ralph_check_github_prs() {
@@ -170,7 +177,7 @@ ralph_github_loop() {
           --append-system-prompt "$(cat "$prompt_file")" \
           "You are RALPH_${(U)agent_key}, instance $instance_num. Your worktree is: $work_dir (project root: $project_dir). Fix this PR now:
 $target_pr
-Start with Step 1 — checkout the branch and read feedback.") \
+Start with Step 1 — checkout the branch and assess what needs fixing.") \
         | grep --line-buffered '^{' \
         | tee "$tmpfile" \
         | jq --unbuffered -rj "$stream_text"
