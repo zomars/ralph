@@ -110,7 +110,7 @@ ralph_github_loop() {
   local child_pid=""
   local shutdown=0
 
-  trap 'shutdown=1' INT TERM HUP
+  trap 'shutdown=1; [[ -n "$child_pid" ]] && kill -INT -$child_pid 2>/dev/null' INT TERM HUP
   trap 'ralph_titlebar_cleanup; rm -f "$tmpfile" 2>/dev/null; rm -rf "$instance_slot" 2>/dev/null; ralph_cleanup_worktree "$work_dir"; [[ -n "$child_pid" ]] && kill -9 -$child_pid 2>/dev/null; kill -9 0 2>/dev/null' EXIT
 
   die() {

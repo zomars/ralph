@@ -24,6 +24,7 @@ ralph_init() {
 # ralph_setup_worktree <agent_key> <instance_num>
 # Creates (or reuses) a persistent git worktree for this agent instance.
 # Prints the worktree directory path to stdout.
+# If RALPH_WORKTREE_SETUP is set in .ralphrc, it runs every agent start.
 ralph_setup_worktree() {
   local agent_key="$1" instance_num="$2"
   local work_dir="/tmp/ralph-worktrees/${agent_key}-${instance_num}"
@@ -48,6 +49,14 @@ ralph_setup_worktree() {
     else
       echo '{"mcpServers":{"jira":{"command":"ralph-jira-mcp"}}}' > "$work_dir/.mcp.json"
     fi
+  fi
+
+  # Run project-specific worktree setup if configured
+  if [[ -n "${RALPH_WORKTREE_SETUP:-}" ]]; then
+    ralph_log "Running worktree setup..." >&2
+    (cd "$work_dir" && eval "$RALPH_WORKTREE_SETUP") >&2 || {
+      ralph_error "Worktree setup failed (exit $?). Continuing anyway."
+    }
   fi
 
   echo "$work_dir"

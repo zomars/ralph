@@ -14,3 +14,6 @@ export RALPH_POLL_INTERVAL=5
 
 # Session log directory (unset = no logs saved)
 # export RALPH_LOG_DIR="./ralph-logs"
+
+# Worktree setup command — runs every agent start inside the worktree.
+# export RALPH_WORKTREE_SETUP="bash scripts/worktree-setup.sh && npm install"
