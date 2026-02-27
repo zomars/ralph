@@ -13,17 +13,17 @@ PROVIDER_ENV_VARS=(JIRA_EMAIL JIRA_API_TOKEN JIRA_BASE_URL)
 # Returns: task count (0 = no tasks)
 provider_check_tasks() {
   local query="$1"
+  local body
+  body=$(jq -n --arg jql "$query" '{"jql":$jql,"maxResults":10,"fields":["summary"]}')
   local response
-  response=$(curl -s --fail-with-body -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
+  if ! response=$(curl -s --fail-with-body -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
     -H "Content-Type: application/json" \
     -X POST \
-    -d "{\"jql\":\"$query\",\"maxResults\":10,\"fields\":[\"summary\"]}" \
-    "$JIRA_BASE_URL/rest/api/3/search/jql" 2>&1)
-
-  if [[ $? -ne 0 ]]; then
+    -d "$body" \
+    "$JIRA_BASE_URL/rest/api/3/search/jql" 2>&1); then
     ralph_error "Provider check failed: $response"
     echo "0"
-    return
+    return 0
   fi
 
   echo "$response" | jq '.issues | length'
