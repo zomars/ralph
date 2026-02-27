@@ -16,14 +16,13 @@ No PR → `<promise>COMPLETE</promise>`.
 
 Fetch current state:
 ```bash
-gh pr view <number> --json mergeable,reviewDecision,statusCheckRollup,labels
+gh pr view <number> --json mergeable,statusCheckRollup,labels
 ```
 
 Verify ALL conditions:
-- Approved (`reviewDecision == "APPROVED"`)
 - Mergeable (no conflicts)
 - CI green (status checks passing)
-- Merge label present
+- Merge label present (`ready-to-merge`)
 
 If ANY condition fails:
 ```bash

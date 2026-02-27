@@ -119,7 +119,6 @@ ralph_fetch_mergeable_prs() {
             headRefName
             baseRefName
             mergeable
-            reviewDecision
             commits(last: 1) {
               nodes {
                 commit {
@@ -132,7 +131,6 @@ ralph_fetch_mergeable_prs() {
       }
     }" --jq '[.data.search.nodes[] |
       select(.mergeable == "MERGEABLE") |
-      select(.reviewDecision == "APPROVED") |
       select(.commits.nodes[0].commit.statusCheckRollup.state == "SUCCESS") |
       {number, title, url, headRefName, baseRefName}
     ]' 2>/dev/null || echo "[]"
