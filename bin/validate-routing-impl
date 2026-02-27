@@ -9,6 +9,7 @@ set -eo pipefail
 #   validate-routing --matrix     # Full matrix output
 #   validate-routing --check-prompts  # Check JQL drift between routing.json and prompt files
 #   validate-routing --check-loops    # Check for self-loop and global-exclude violations
+#   validate-routing --check-core     # Check core behaviors (CLI routing, filters, promises)
 #   validate-routing --check-all      # Run all checks
 
 RALPH_HOME="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
@@ -378,6 +379,232 @@ check_loops() {
   return $exit_code
 }
 
+check_core() {
+  local exit_code=0 pass=0 fail=0
+  local test_tmpdir
+  test_tmpdir=$(mktemp -d)
+
+  echo "Checking core behaviors..."
+  echo ""
+
+  # Verify zsh is available (Ralph agents require it)
+  if ! command -v zsh &>/dev/null; then
+    echo "  SKIP: zsh not available (required for core behavior tests)"
+    return 0
+  fi
+
+  # Helper: run a zsh snippet with ralph-core.sh sourced (in clean dir to avoid .ralphrc)
+  run_zsh() {
+    (cd "$test_tmpdir" && zsh -c "RALPH_HOME='$RALPH_HOME'; source '$RALPH_HOME/lib/ralph-core.sh'; $1") 2>/dev/null
+  }
+
+  assert_ok() {
+    echo "  $1: OK"
+    pass=$((pass + 1))
+  }
+
+  assert_fail() {
+    echo "  $1: FAIL"
+    [ -n "${2:-}" ] && echo "    $2"
+    fail=$((fail + 1))
+    exit_code=1
+  }
+
+  # ─── Story 1: Correct CLI for each model provider ─────────────────────
+
+  local result
+  for provider in claude gemini codex; do
+    result=$(run_zsh "RALPH_MODEL_PROVIDER=$provider; ralph_get_agent_cli")
+    if [ "$result" = "$provider" ]; then
+      assert_ok "Ralph invokes correct CLI for $provider"
+    else
+      assert_fail "Ralph invokes correct CLI for $provider" "expected '$provider', got '$result'"
+    fi
+  done
+
+  # ─── Story 2: Reject unknown model provider ───────────────────────────
+
+  local bogus_exit=0
+  run_zsh "RALPH_MODEL_PROVIDER=bogus; ralph_init" || bogus_exit=$?
+  if [ "$bogus_exit" -ne 0 ]; then
+    assert_ok "Ralph rejects unknown model provider"
+  else
+    assert_fail "Ralph rejects unknown model provider" "expected non-zero exit, got 0"
+  fi
+
+  # ─── Fixtures ─────────────────────────────────────────────────────────
+
+  local claude_fixture gemini_fixture codex_fixture
+  claude_fixture='{"type":"assistant","message":{"content":[{"type":"text","text":"Working on PROD-42..."}]}}
+{"type":"result","result":"Done. <promise>COMPLETE</promise>"}'
+
+  gemini_fixture='{"type":"message","role":"assistant","content":"Working on PROD-42..."}
+{"type":"message","role":"assistant","content":"Done. <promise>COMPLETE</promise>"}'
+
+  codex_fixture='{"type":"item.completed","item":{"type":"agent_message","text":"Working on PROD-42..."}}
+{"type":"item.completed","item":{"type":"agent_message","text":"Done. <promise>COMPLETE</promise>"}}'
+
+  local claude_abort='{"type":"result","result":"Failed. <promise>ABORT</promise>"}'
+  local gemini_abort='{"type":"message","role":"assistant","content":"Failed. <promise>ABORT</promise>"}'
+  local codex_abort='{"type":"item.completed","item":{"type":"agent_message","text":"Failed. <promise>ABORT</promise>"}}'
+
+  # Extract jq filters from ralph-core.sh via zsh
+  local claude_stream claude_result_f gemini_stream gemini_result_f codex_stream codex_result_f
+  claude_stream=$(run_zsh 'RALPH_MODEL_PROVIDER=claude; ralph_get_jq_filters; printf "%s" "$RALPH_STREAM_FILTER"')
+  claude_result_f=$(run_zsh 'RALPH_MODEL_PROVIDER=claude; ralph_get_jq_filters; printf "%s" "$RALPH_RESULT_FILTER"')
+  gemini_stream=$(run_zsh 'RALPH_MODEL_PROVIDER=gemini; ralph_get_jq_filters; printf "%s" "$RALPH_STREAM_FILTER"')
+  gemini_result_f=$(run_zsh 'RALPH_MODEL_PROVIDER=gemini; ralph_get_jq_filters; printf "%s" "$RALPH_RESULT_FILTER"')
+  codex_stream=$(run_zsh 'RALPH_MODEL_PROVIDER=codex; ralph_get_jq_filters; printf "%s" "$RALPH_STREAM_FILTER"')
+  codex_result_f=$(run_zsh 'RALPH_MODEL_PROVIDER=codex; ralph_get_jq_filters; printf "%s" "$RALPH_RESULT_FILTER"')
+
+  # ─── Story 3: Stream output through jq filters ────────────────────────
+
+  local fixture_var filter_var output
+  for provider in claude gemini codex; do
+    fixture_var="${provider}_fixture"
+    filter_var="${provider}_stream"
+    output=$(printf '%s\n' "${!fixture_var}" | jq -rj "${!filter_var}" 2>/dev/null || true)
+    if [ -n "$output" ] && echo "$output" | grep -q "PROD-42"; then
+      assert_ok "Ralph streams $provider output through jq"
+    else
+      assert_fail "Ralph streams $provider output through jq" "output was empty or missing PROD-42"
+    fi
+  done
+
+  # ─── Story 4: Detect <promise>COMPLETE</promise> ──────────────────────
+
+  for provider in claude gemini codex; do
+    fixture_var="${provider}_fixture"
+    filter_var="${provider}_result_f"
+    output=$(printf '%s\n' "${!fixture_var}" | jq -r "${!filter_var}" 2>/dev/null || true)
+    if echo "$output" | grep -q '<promise>COMPLETE</promise>'; then
+      assert_ok "Ralph detects COMPLETE promise for $provider"
+    else
+      assert_fail "Ralph detects COMPLETE promise for $provider" "promise not found in result"
+    fi
+  done
+
+  # ─── Story 5: Detect <promise>ABORT</promise> ─────────────────────────
+
+  for provider in claude gemini codex; do
+    fixture_var="${provider}_abort"
+    filter_var="${provider}_result_f"
+    output=$(printf '%s\n' "${!fixture_var}" | jq -r "${!filter_var}" 2>/dev/null || true)
+    if echo "$output" | grep -q '<promise>ABORT</promise>'; then
+      assert_ok "Ralph detects ABORT promise for $provider"
+    else
+      assert_fail "Ralph detects ABORT promise for $provider" "promise not found in result"
+    fi
+  done
+
+  # ─── Story 6: No cross-match between providers ────────────────────────
+
+  local src tgt
+  for src in claude gemini codex; do
+    for tgt in claude gemini codex; do
+      [ "$src" = "$tgt" ] && continue
+      fixture_var="${src}_fixture"
+      filter_var="${tgt}_stream"
+      output=$(printf '%s\n' "${!fixture_var}" | jq -rj "${!filter_var}" 2>/dev/null || true)
+      output=$(echo "$output" | tr -d '[:space:]')
+      if [ -z "$output" ]; then
+        assert_ok "No cross-match: $src fixture through $tgt filter"
+      else
+        assert_fail "No cross-match: $src fixture through $tgt filter" "unexpected output: $output"
+      fi
+    done
+  done
+
+  # ─── Story 7: Titlebar contains iteration number ──────────────────────
+
+  if grep -q 'Iteration $iteration' "$RALPH_HOME/lib/ralph-gated-loop.sh"; then
+    assert_ok "Gated loop titlebar shows iteration number"
+  else
+    assert_fail "Gated loop titlebar shows iteration number"
+  fi
+  if grep -q 'Iteration $iteration' "$RALPH_HOME/lib/ralph-github-loop.sh"; then
+    assert_ok "GitHub loop titlebar shows iteration number"
+  else
+    assert_fail "GitHub loop titlebar shows iteration number"
+  fi
+
+  # ─── Story 8: Poll interval configuration ─────────────────────────────
+
+  local interval
+  interval=$(run_zsh 'unset RALPH_POLL_INTERVAL; ralph_get_poll_interval')
+  if [ "$interval" = "15" ]; then
+    assert_ok "Ralph defaults poll interval to 15"
+  else
+    assert_fail "Ralph defaults poll interval to 15" "got '$interval'"
+  fi
+  interval=$(run_zsh 'RALPH_POLL_INTERVAL=30; ralph_get_poll_interval')
+  if [ "$interval" = "30" ]; then
+    assert_ok "Ralph respects custom poll interval"
+  else
+    assert_fail "Ralph respects custom poll interval" "expected 30, got '$interval'"
+  fi
+
+  # ─── Story 9: Session log saved when RALPH_LOG_DIR is set ─────────────
+
+  local log_dir="$test_tmpdir/logs"
+  echo '{"type":"test"}' > "$test_tmpdir/session.json"
+  run_zsh "RALPH_LOG_DIR='$log_dir'; ralph_save_session_log '$test_tmpdir/session.json' 'test-agent' '1' 'TASK-1'"
+  if ls "$log_dir"/test-agent-1/*.log &>/dev/null; then
+    assert_ok "Ralph saves session log when RALPH_LOG_DIR is set"
+  else
+    assert_fail "Ralph saves session log when RALPH_LOG_DIR is set" "no .log files found"
+  fi
+
+  # ─── Story 10: Extract task key from stream output ─────────────────────
+
+  echo '{"text":"Working on PROD-42 now"}' > "$test_tmpdir/taskkey.txt"
+  result=$(run_zsh "ralph_extract_task_key '$test_tmpdir/taskkey.txt'")
+  if [ "$result" = "PROD-42" ]; then
+    assert_ok "Ralph extracts task key PROD-42"
+  else
+    assert_fail "Ralph extracts task key PROD-42" "got '$result'"
+  fi
+
+  echo '{"text":"no key here"}' > "$test_tmpdir/nokey.txt"
+  result=$(run_zsh "ralph_extract_task_key '$test_tmpdir/nokey.txt'")
+  if [ -z "$result" ]; then
+    assert_ok "Ralph returns empty for missing task key"
+  else
+    assert_fail "Ralph returns empty for missing task key" "got '$result'"
+  fi
+
+  # ─── Story 11: All prompt and provider files exist ─────────────────────
+
+  local agent prompt_path
+  for agent in $(get_agents); do
+    prompt_path=$(jq -r ".agents.${agent}.prompt" "$ROUTING_JSON")
+    if [ -f "$RALPH_HOME/$prompt_path" ]; then
+      assert_ok "Prompt file exists: $agent"
+    else
+      assert_fail "Prompt file exists: $agent" "missing: $prompt_path"
+    fi
+  done
+
+  if [ -f "$RALPH_HOME/providers/$RALPH_PROVIDER/instructions.md" ]; then
+    assert_ok "Provider instructions file exists"
+  else
+    assert_fail "Provider instructions file exists" "missing: providers/$RALPH_PROVIDER/instructions.md"
+  fi
+
+  # ─── Cleanup & Summary ────────────────────────────────────────────────
+
+  rm -rf "$test_tmpdir"
+
+  echo ""
+  if [ "$exit_code" -eq 0 ]; then
+    echo "PASS: All $pass core behavior checks passed."
+  else
+    echo "FAIL: $fail of $((pass + fail)) core behavior checks failed."
+  fi
+
+  return $exit_code
+}
+
 # ─── Main ────────────────────────────────────────────────────────────────────
 
 case "${1:-}" in
@@ -389,6 +616,9 @@ case "${1:-}" in
     ;;
   --check-loops)
     check_loops
+    ;;
+  --check-core)
+    check_core
     ;;
   --check-all)
     all_exit=0
@@ -408,6 +638,10 @@ case "${1:-}" in
     echo ""
     check_loops || all_exit=1
     echo ""
+    echo "--- Core Behaviors ---"
+    echo ""
+    check_core || all_exit=1
+    echo ""
     echo "=========================================="
     if [ "$all_exit" -eq 0 ]; then
       echo "  ALL CHECKS PASSED"
@@ -418,13 +652,14 @@ case "${1:-}" in
     exit $all_exit
     ;;
   --help|-h)
-    echo "Usage: validate-routing [--matrix | --check-prompts | --check-loops | --check-all]"
+    echo "Usage: validate-routing [--matrix | --check-prompts | --check-loops | --check-core | --check-all]"
     echo ""
     echo "  (default)        Simulate ticket states, report overlaps and gaps"
     echo "  --matrix         Full matrix output showing all agents vs all states"
     echo "  --check-prompts  Check JQL drift between routing.json and prompt files"
     echo "  --check-loops    Check for self-loop risks and global-exclude violations"
-    echo "  --check-all      Run all checks (simulation + prompts + loops)"
+    echo "  --check-core     Check core behaviors (CLI routing, jq filters, promises, etc.)"
+    echo "  --check-all      Run all checks (simulation + prompts + loops + core)"
     exit 0
     ;;
   "")
@@ -432,7 +667,7 @@ case "${1:-}" in
     ;;
   *)
     echo "Unknown option: $1"
-    echo "Usage: validate-routing [--matrix | --check-prompts | --check-loops | --check-all]"
+    echo "Usage: validate-routing [--matrix | --check-prompts | --check-loops | --check-core | --check-all]"
     exit 1
     ;;
 esac
