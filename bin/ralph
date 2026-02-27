@@ -37,6 +37,7 @@ Debugging:
 
 Utility commands:
   validate          Run routing validation (accepts --matrix, --check-prompts, --check-loops, --check-all)
+  status            Show task counts and running instances for all agents
   init              Create a .ralphrc file in the current directory
   config            Show current configuration
   version           Show version
@@ -87,6 +88,79 @@ cmd_config() {
   else
     echo "Local config:   (none — run 'ralph init' to create .ralphrc)"
   fi
+}
+
+cmd_status() {
+  ralph_load_provider
+
+  local routing_json
+  routing_json="$(ralph_get_routing_json)"
+
+  # Jira-gated agents from routing.json
+  local jira_agents=()
+  while IFS= read -r a; do
+    jira_agents+=("$a")
+  done < <(jq -r '.agents | keys[]' "$routing_json")
+
+  # GitHub-gated agents (not in routing.json)
+  local github_agents=(fixer merger)
+
+  # All agents in display order
+  local all_agents=("${jira_agents[@]}" "${github_agents[@]}")
+
+  # ── Gather Jira task counts ──────────────────────────────────────────────
+  typeset -A task_counts
+  ralph_validate_env $PROVIDER_ENV_VARS
+  for agent in "${jira_agents[@]}"; do
+    local query
+    query="$(ralph_get_query "$agent")"
+    task_counts[$agent]=$(provider_check_tasks "$query")
+  done
+
+  # ── Gather GitHub PR counts ─────────────────────────────────────────────
+  source "$RALPH_HOME/lib/ralph-github-loop.sh"
+  if command -v gh &>/dev/null && gh auth status &>/dev/null; then
+    task_counts[fixer]=$(ralph_fetch_fixer_prs | jq 'length')
+    task_counts[merger]=$(ralph_fetch_mergeable_prs | jq 'length')
+  else
+    task_counts[fixer]="?"
+    task_counts[merger]="?"
+  fi
+
+  # ── Count running instances per agent ───────────────────────────────────
+  typeset -A running_counts
+  for agent in "${all_agents[@]}"; do
+    local count=0
+    local base_dir="/tmp/ralph-${agent}"
+    if [[ -d "$base_dir" ]]; then
+      for pidfile in "$base_dir"/*/pid(N); do
+        if kill -0 "$(cat "$pidfile")" 2>/dev/null; then
+          count=$((count + 1))
+        else
+          # Clean stale slot
+          rm -rf "${pidfile:h}" 2>/dev/null
+        fi
+      done
+    fi
+    running_counts[$agent]=$count
+  done
+
+  # ── Print table ─────────────────────────────────────────────────────────
+  local total_tasks=0 total_running=0
+
+  printf "%-14s %5s  %7s\n" "Agent" "Tasks" "Running"
+  printf "%.0s─" {1..30}; echo
+
+  for agent in "${all_agents[@]}"; do
+    local t="${task_counts[$agent]:-0}"
+    local r="${running_counts[$agent]:-0}"
+    printf "%-14s %5s  %7s\n" "$agent" "$t" "$r"
+    [[ "$t" =~ ^[0-9]+$ ]] && total_tasks=$((total_tasks + t))
+    total_running=$((total_running + r))
+  done
+
+  printf "%.0s─" {1..30}; echo
+  printf "%-14s %5s  %7s\n" "Total" "$total_tasks" "$total_running"
 }
 
 cmd_version() {
@@ -271,6 +345,7 @@ subcmd="${1:-}"
 case "$subcmd" in
   init)               cmd_init ;;
   config)             cmd_config ;;
+  status)             cmd_status ;;
   debug)              cmd_debug "$@" ;;
   version|-v)         cmd_version ;;
   help|--help|-h|"")  usage ;;
