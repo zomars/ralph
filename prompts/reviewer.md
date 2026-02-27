@@ -12,7 +12,7 @@
 ## 1. Load Context
 
 1. Find assigned review tasks using the backlog search tool.
-   - **JQL**: `assignee = currentUser() AND status = "In Review" AND (labels is EMPTY OR labels not in ("needs-planning", "needs-tests", "tech-debt", "needs-input")) ORDER BY priority DESC`
+   - **JQL**: `assignee = currentUser() AND status = "In Review" AND (labels is EMPTY OR labels not in ("needs-planning", "needs-tests", "tech-debt", "needs-input", "ready-to-merge")) ORDER BY priority DESC`
    - **IMPORTANT**: Set `maxResults=1` to avoid reading too much data.
 2. Read last 10 RALPH commits.
 
@@ -41,18 +41,13 @@ Fetch the chosen issue's full details using the backlog task detail tool.
     git checkout "ralph/<TASK-KEY>"
     git pull origin "ralph/<TASK-KEY>"
     ```
-3.  **Already-reviewed guard**: Check if this PR was already approved:
-    ```bash
-    HAS_MERGE_LABEL=$(gh pr view "ralph/<TASK-KEY>" --json labels --jq '.labels[].name' | grep -c 'ready-to-merge' || true)
-    ```
-    If `HAS_MERGE_LABEL` is not `0` → already reviewed, waiting for merge. Release the branch and output `<promise>COMPLETE</promise>`.
-4.  **Run Tests**: Execute `npm run test` (or equivalent).
+3.  **Run Tests**: Execute `npm run test` (or equivalent).
     - If tests FAIL: Reject immediately.
-5.  **Analyze Code**: Read the changes.
+4.  **Analyze Code**: Read the changes.
     - **Logic Check**: Is the implementation correct based on the ticket description?
     - **Code Quality**: Is the code clean? Any obvious bad patterns?
     - **Test Coverage**: Are there new tests for the new feature?
-6.  **Verify Testing Evidence**: Read the issue comments looking for a **test report from the Tester agent**.
+5.  **Verify Testing Evidence**: Read the issue comments looking for a **test report from the Tester agent**.
     - A valid test report MUST include: numbered test steps, screenshots as evidence, and a PASS/FAIL result.
     - If no test report exists, or the report lacks screenshots/evidence, the task is NOT ready for approval — route to Path B.
 
@@ -95,6 +90,7 @@ Based on your analysis, choose ONE path:
   gh label create ready-to-merge --description "Reviewer-approved, safe to merge" --color 0E8A16 --force
   gh pr edit "ralph/<TASK-KEY>" --add-label "ready-to-merge"
   ```
+- **Label**: Add `ready-to-merge` label to the Jira issue (prevents reviewer from re-picking this task).
 - **Transition**: Keep status at **"In Review"** — the merger will move it to "Done" after merging.
 
 ## 5. Commit & Stop

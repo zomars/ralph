@@ -7,7 +7,8 @@
     "ralph-blocked",
     "ralph-failed",
     "needs-input",
-    "documented"
+    "documented",
+    "ready-to-merge"
   ],
   "global_label_excludes": ["needs-input"],
   "agents": {
@@ -36,12 +37,12 @@
       "prompt": "prompts/implementer.md"
     },
     "reviewer": {
-      "jql": "assignee = currentUser() AND status = 'In Review' AND (labels is EMPTY OR labels not in ('needs-planning', 'needs-tests', 'tech-debt', 'needs-input')) ORDER BY priority DESC",
-      "adds_labels": ["ralph-failed", "needs-tests", "tech-debt"],
+      "jql": "assignee = currentUser() AND status = 'In Review' AND (labels is EMPTY OR labels not in ('needs-planning', 'needs-tests', 'tech-debt', 'needs-input', 'ready-to-merge')) ORDER BY priority DESC",
+      "adds_labels": ["ralph-failed", "needs-tests", "tech-debt", "ready-to-merge"],
       "rules": {
         "status_in": ["In Review"],
         "labels_include": null,
-        "labels_exclude": ["needs-planning", "needs-tests", "tech-debt", "needs-input"],
+        "labels_exclude": ["needs-planning", "needs-tests", "tech-debt", "needs-input", "ready-to-merge"],
         "description_condition": null
       },
       "script": "bin/afk-reviewer",
