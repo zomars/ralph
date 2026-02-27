@@ -13,6 +13,7 @@ You are connected to Jira as the backlog provider. Use the following tools and c
 - **Get transitions**: `mcp__jira__getTransitionsForJiraIssue` — always discover available transitions before transitioning
 - **Transition status**: `mcp__jira__transitionJiraIssue`
 - **Create issue link**: `mcp__jira__createIssueLink` — link two issues (e.g. "Blocks")
+- **Create remote link**: `mcp__jira__createRemoteLink` — attach an external URL (e.g. GitHub PR) to an issue
 
 ## Status Names
 

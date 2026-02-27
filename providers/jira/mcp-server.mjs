@@ -394,6 +394,27 @@ server.tool(
   }
 );
 
+// 8. Create remote link
+server.tool(
+  "createRemoteLink",
+  "Attach an external URL (e.g. GitHub PR) to a Jira issue",
+  {
+    issueIdOrKey: z.string().describe("Issue key (e.g. PROJ-123)"),
+    url: z.string().describe("URL to link"),
+    title: z.string().describe("Link display text"),
+  },
+  async ({ issueIdOrKey, url, title }) => {
+    try {
+      const res = await jira("POST", `/rest/api/3/issue/${issueIdOrKey}/remotelink`, {
+        object: { url, title },
+      });
+      return ok({ success: true, key: issueIdOrKey, id: res?.id });
+    } catch (e) {
+      return err(e.message);
+    }
+  }
+);
+
 // ── Start ───────────────────────────────────────────────────────────────────
 
 const transport = new StdioServerTransport();
