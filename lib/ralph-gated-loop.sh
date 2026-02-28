@@ -154,25 +154,33 @@ $RALPH_WORKTREE_CONTEXT"
 
     local max_iteration_seconds="${RALPH_MAX_ITERATION_SECONDS:-1800}"
 
+    # Write Claude output to a file (not a pipe). Child processes spawned by
+    # Claude's Bash tool inherit pipe fds via fork(); if they outlive Claude
+    # (e.g. dev servers), the pipe never gets EOF and `wait` blocks forever.
+    # Writing to a file avoids this: `wait` returns when Claude exits.
+    local raw_output=$(mktemp)
+
     setopt MONITOR
     {
-      (
-        ralph_exec_llm "$agent_key" "$instance_num" "$work_dir" "$prompt_file" "$provider_instructions" "$initial_message" \
-        | grep --line-buffered '^{' \
-        | tee "$tmpfile" | tee -a "$session_log" \
-        | jq --unbuffered -rj "$stream_text"
-      ) </dev/null &
+      ralph_exec_llm "$agent_key" "$instance_num" "$work_dir" "$prompt_file" "$provider_instructions" "$initial_message" \
+        </dev/null >"$raw_output" &
     } 2>/dev/null
     child_pid=$!
     unsetopt MONITOR
 
-    # Watchdog: force-kill if Claude hangs after max_turns (e.g. orphaned dev servers)
+    # Stream output for real-time display and session log
+    ( tail -f -n +1 "$raw_output" | grep --line-buffered '^{' \
+      | tee -a "$session_log" | jq --unbuffered -rj "$stream_text" ) &
+    local stream_pid=$!
+
+    # Watchdog: force-kill if Claude hangs after max_turns
     local watchdog_pid=""
     ( sleep "$max_iteration_seconds" && ralph_log "Iteration timeout (${max_iteration_seconds}s). Force-killing..." && kill -9 -$child_pid 2>/dev/null ) &
     watchdog_pid=$!
 
     wait $child_pid 2>/dev/null || true
     kill $watchdog_pid 2>/dev/null; wait $watchdog_pid 2>/dev/null || true
+    kill $stream_pid 2>/dev/null; wait $stream_pid 2>/dev/null || true
     watchdog_pid=""
     [[ $shutdown -eq 1 ]] && die
     kill -9 -$child_pid 2>/dev/null || true
@@ -180,6 +188,10 @@ $RALPH_WORKTREE_CONTEXT"
 
     # Kill orphaned processes (dev servers, MCP servers) left in the worktree
     ralph_cleanup_worktree_processes "$work_dir"
+
+    # Build tmpfile from complete output (stream may have lagged)
+    grep '^{' "$raw_output" > "$tmpfile" 2>/dev/null || true
+    rm -f "$raw_output"
 
     # Reset worktree to workspace branch to avoid stale state from timed-out agents
     local workspace_branch="ralph-workspace/${agent_key}-${instance_num}"
