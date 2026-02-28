@@ -230,6 +230,8 @@ ralph_github_loop() {
   local tmpfile=""
   local child_pid=""
   local shutdown=0
+  local consecutive_empty=0
+  local max_consecutive_empty="${RALPH_MAX_EMPTY_ITERATIONS:-5}"
   local no_work_label
   no_work_label=$(ralph_github_no_work_label "$agent_key")
 
@@ -265,6 +267,13 @@ ralph_github_loop() {
 
   # ─── Main loop ──────────────────────────────────────────────────────────
   while true; do
+    # Re-create worktree if it disappeared (e.g. cleaned by OS or another process)
+    if [[ "$uses_worktree" == "true" && ! -d "$work_dir" ]]; then
+      ralph_log "Worktree missing ($work_dir). Recreating..."
+      ralph_setup_worktree "$agent_key" "$instance_num"
+      work_dir="$RALPH_WORKTREE_DIR"
+    fi
+
     local pr_json pr_count
     pr_json=$(ralph_github_fetch_for_agent "$agent_key")
     pr_count=$(echo "$pr_json" | jq 'length')
@@ -327,6 +336,19 @@ ralph_github_loop() {
     local result
     result=$(jq -r "$final_result" "$tmpfile" 2>/dev/null || true)
     last_task_key=$(ralph_extract_task_key "$tmpfile")
+
+    # Detect empty iterations (Claude crashed or produced no output)
+    if [[ ! -s "$tmpfile" ]]; then
+      consecutive_empty=$((consecutive_empty + 1))
+      ralph_error "Empty output from Claude (consecutive: $consecutive_empty/$max_consecutive_empty)"
+      if (( consecutive_empty >= max_consecutive_empty )); then
+        ralph_error "Too many consecutive empty iterations. Aborting."
+        rm -f "$tmpfile"
+        exit 1
+      fi
+    else
+      consecutive_empty=0
+    fi
 
     rm -f "$tmpfile"
     tmpfile=""

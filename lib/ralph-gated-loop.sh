@@ -81,6 +81,8 @@ ralph_gated_loop() {
   local tmpfile=""
   local child_pid=""
   local shutdown=0
+  local consecutive_empty=0
+  local max_consecutive_empty="${RALPH_MAX_EMPTY_ITERATIONS:-5}"
 
   trap 'shutdown=1; [[ -n "$child_pid" ]] && kill -INT -$child_pid 2>/dev/null' INT TERM HUP
   local last_task_key=""
@@ -113,6 +115,13 @@ ralph_gated_loop() {
 
   # ─── Main loop ──────────────────────────────────────────────────────────
   while true; do
+    # Re-create worktree if it disappeared (e.g. cleaned by OS or another process)
+    if [[ ! -d "$work_dir" ]]; then
+      ralph_log "Worktree missing ($work_dir). Recreating..."
+      ralph_setup_worktree "$agent_key" "$instance_num"
+      work_dir="$RALPH_WORKTREE_DIR"
+    fi
+
     local task_count
     task_count=$(provider_check_tasks "$query")
 
@@ -181,6 +190,19 @@ $RALPH_WORKTREE_CONTEXT"
     local result
     result=$(jq -r "$final_result" "$tmpfile" 2>/dev/null || true)
     last_task_key=$(ralph_extract_task_key "$tmpfile")
+
+    # Detect empty iterations (Claude crashed or produced no output)
+    if [[ ! -s "$tmpfile" ]]; then
+      consecutive_empty=$((consecutive_empty + 1))
+      ralph_error "Empty output from Claude (consecutive: $consecutive_empty/$max_consecutive_empty)"
+      if (( consecutive_empty >= max_consecutive_empty )); then
+        ralph_error "Too many consecutive empty iterations. Aborting."
+        rm -f "$tmpfile"
+        exit 1
+      fi
+    else
+      consecutive_empty=0
+    fi
 
     rm -f "$tmpfile"
     tmpfile=""
