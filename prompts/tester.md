@@ -60,7 +60,7 @@ git pull origin "ralph/<TASK-KEY>"
 
 ### 3a. Start Dev Environment & Understand What to Test
 
-1. **Start the dev environment FIRST.** You run inside an isolated git worktree. If the initial message includes "Worktree setup output", it contains ports, URLs, and environment details from the project's setup script — follow those instructions exactly. Do NOT guess or override what the setup script provides. If no worktree context is provided, read the root README or package.json to find the dev command, commit to one approach — do not cycle between strategies if the first attempt fails. Start the server in the background and move on immediately.
+1. **Start the dev environment FIRST.** You run inside an isolated git worktree. If the initial message includes "Worktree setup output", follow it **exactly** — use the startup command and URLs it provides, not defaults. Worktrees use allocated ports to avoid conflicts between instances. If no worktree context is provided, read the root README or package.json to find the dev command, commit to one approach — do not cycle between strategies if the first attempt fails.
 2. **Read the issue description and all comments** carefully. Comments from reviewers may specify what testing was missing or what to focus on. Identify the acceptance criteria and expected behavior.
 3. **Targeted code exploration only** — find the specific route/component/API for this task. Do NOT explore the full project architecture. Spend at most 3-4 tool calls on exploration, then move to the browser.
 
