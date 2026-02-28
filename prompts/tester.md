@@ -22,15 +22,16 @@ Every task gets browser verification. Integration and unit tests are added when 
 
 1. Find assigned test tasks using the backlog search tool.
    - **JQL**: `assignee = currentUser() AND labels = "needs-tests" AND (labels is EMPTY OR labels not in ("needs-planning", "needs-input")) AND status != "Done" ORDER BY priority DESC`
-   - **IMPORTANT**: Set `maxResults=1` to avoid reading too much data.
+   - **IMPORTANT**: Set `maxResults` to your instance number (from the user message, e.g. "instance 2" → `maxResults=2`). Default to `maxResults=1` if no instance number is given.
 2. Read last 10 RALPH commits.
 
 ## 2. Pick A SINGLE Task
 
 From the query results (already sorted by priority):
 
-1. Pick the first issue.
-2. If NO issues returned by query → `<promise>COMPLETE</promise>` (all assigned work is done).
+1. If fewer results were returned than your instance number → `<promise>COMPLETE</promise>` (another instance is handling the remaining tasks).
+2. Pick the **last** result returned (e.g. instance 2 picks result #2, instance 1 picks result #1).
+3. If NO issues returned by query → `<promise>COMPLETE</promise>` (all assigned work is done).
 
 Fetch the chosen issue's full details using the backlog task detail tool.
 
@@ -57,12 +58,11 @@ git checkout "ralph/<TASK-KEY>"
 git pull origin "ralph/<TASK-KEY>"
 ```
 
-### 3a. Understand What to Test
+### 3a. Start Dev Environment & Understand What to Test
 
-1. **Explore the project**: Before starting any services, explore the repo to understand its architecture, local dev setup, and testing conventions. Look at the root directory, read any docs or guides you find. Understand how to run the dev stack, what services are required, and any known gotchas.
+1. **Start the dev environment FIRST.** You run inside an isolated git worktree. If the initial message includes "Worktree setup output", it contains ports, URLs, and environment details from the project's setup script — follow those instructions exactly. Do NOT guess or override what the setup script provides. If no worktree context is provided, read the root README or package.json to find the dev command, commit to one approach — do not cycle between strategies if the first attempt fails. Start the server in the background and move on immediately.
 2. **Read the issue description and all comments** carefully. Comments from reviewers may specify what testing was missing or what to focus on. Identify the acceptance criteria and expected behavior.
-3. **Explore the relevant code** to understand the feature: find relevant routes, components, API endpoints. Understand what URL to navigate to and what UI elements to interact with.
-4. **Start the dev environment** following what you learned from exploring the project. If required services (databases, proxies, etc.) need to start in a specific order, follow that.
+3. **Targeted code exploration only** — find the specific route/component/API for this task. Do NOT explore the full project architecture. Spend at most 3-4 tool calls on exploration, then move to the browser.
 
 ### 3b. Test Using Playwright MCP
 

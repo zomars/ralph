@@ -19,17 +19,14 @@ Fetch current state:
 gh pr view <number> --json mergeable,statusCheckRollup,labels
 ```
 
-Verify ALL conditions:
+Verify:
 - Mergeable (no conflicts)
-- CI green (status checks passing)
+- CI green (all status checks passing — no `IN_PROGRESS`, `PENDING`, or `QUEUED`)
 - Merge label present (`ready-to-merge`)
 
-If ANY condition fails:
-```bash
-gh pr edit <number> --remove-label "ready-to-merge"
-gh pr comment <number> --body "RALPH_MERGER: Cannot merge — <reason>."
-```
-Then → `<promise>COMPLETE</promise>`
+If ANY condition fails → `<promise>COMPLETE</promise>` (do NOT remove the label or comment — the guard will re-check on the next poll once CI finishes).
+
+**Exception**: If the PR has merge conflicts or the label is missing, remove the label and comment why — those won't self-resolve.
 
 ## 2. Merge
 

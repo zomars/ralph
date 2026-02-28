@@ -172,6 +172,12 @@ $RALPH_WORKTREE_CONTEXT"
     # Kill orphaned processes (dev servers, MCP servers) left in the worktree
     ralph_cleanup_worktree_processes "$work_dir"
 
+    # Reset worktree to workspace branch to avoid stale state from timed-out agents
+    local workspace_branch="ralph-workspace/${agent_key}-${instance_num}"
+    git -C "$work_dir" checkout "$workspace_branch" 2>/dev/null || true
+    git -C "$work_dir" reset --hard HEAD 2>/dev/null || true
+    git -C "$work_dir" clean -fd 2>/dev/null || true
+
     local result
     result=$(jq -r "$final_result" "$tmpfile" 2>/dev/null || true)
     last_task_key=$(ralph_extract_task_key "$tmpfile")

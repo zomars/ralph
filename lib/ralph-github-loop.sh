@@ -99,7 +99,8 @@ ralph_fetch_github_prs() { ralph_fetch_fixer_prs; }
 
 ralph_fetch_mergeable_prs() {
   # Fetch PRs labeled for merge that pass all conditions:
-  # authored by @me, approved, mergeable (no conflicts), CI green.
+  # authored by @me, mergeable (no conflicts), CI fully green.
+  # Skips PRs where any check is still running (avoids race with newly-triggered CI).
   local repo label
   repo=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null) || repo=""
   if [[ -z "$repo" ]]; then
@@ -123,7 +124,15 @@ ralph_fetch_mergeable_prs() {
             commits(last: 1) {
               nodes {
                 commit {
-                  statusCheckRollup { state }
+                  statusCheckRollup {
+                    state
+                    contexts(first: 100) {
+                      nodes {
+                        ... on CheckRun { status conclusion }
+                        ... on StatusContext { state }
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -133,7 +142,12 @@ ralph_fetch_mergeable_prs() {
     }" --jq '[.data.search.nodes[] |
       select(.isDraft == false) |
       select(.mergeable == "MERGEABLE") |
-      select(.commits.nodes[0].commit.statusCheckRollup.state == "SUCCESS") |
+      (.commits.nodes[0].commit.statusCheckRollup) as $rollup |
+      select($rollup.state == "SUCCESS") |
+      select([$rollup.contexts.nodes[] |
+        select(.status != null and .status != "COMPLETED"),
+        select(.state != null and .state != "SUCCESS" and .state != "NEUTRAL")
+      ] | length == 0) |
       {number, title, url, headRefName, baseRefName}
     ]' 2>/dev/null || echo "[]"
 }

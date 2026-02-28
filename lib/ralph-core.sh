@@ -297,6 +297,7 @@ ralph_save_session_log() {
   [[ -z "$RALPH_LOG_DIR" ]] && return
   local session_log="$1" agent_key="$2" instance_num="$3" task_key="$4"
   [[ ! -f "$session_log" ]] && return
+  [[ ! -s "$session_log" ]] && return  # skip empty logs (idle polls)
 
   local log_dir="${RALPH_LOG_DIR%/}/${agent_key}-${instance_num}"
   mkdir -p "$log_dir"
