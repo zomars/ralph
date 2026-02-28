@@ -193,7 +193,8 @@ ralph_github_loop() {
   local work_dir uses_worktree=false
   case "$agent_key" in
     fixer|merger)
-      work_dir=$(ralph_setup_worktree "$agent_key" "$instance_num")
+      ralph_setup_worktree "$agent_key" "$instance_num"
+      work_dir="$RALPH_WORKTREE_DIR"
       uses_worktree=true
       ;;
     *)

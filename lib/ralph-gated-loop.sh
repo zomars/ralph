@@ -48,8 +48,8 @@ ralph_gated_loop() {
 
   # ─── Worktree ───────────────────────────────────────────────────────────
   local project_dir="$PWD"
-  local work_dir
-  work_dir=$(ralph_setup_worktree "$agent_key" "$instance_num")
+  ralph_setup_worktree "$agent_key" "$instance_num"
+  local work_dir="$RALPH_WORKTREE_DIR"
 
   # Validate provider-specific env vars
   ralph_validate_env $PROVIDER_ENV_VARS

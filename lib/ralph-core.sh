@@ -133,32 +133,34 @@ $(cat "$provider_instructions")"
 
 # ralph_setup_worktree <agent_key> <instance_num>
 # Creates (or reuses) a persistent git worktree for this agent instance.
-# Prints the worktree directory path to stdout.
+# Sets globals: RALPH_WORKTREE_DIR (path) and RALPH_WORKTREE_CONTEXT (setup output).
+# Must be called directly (not in a subshell) so globals propagate to the caller.
 # Runs RALPH_WORKTREE_SETUP if set, otherwise auto-detects scripts/worktree-setup.sh.
-# Captures the setup script's stdout into RALPH_WORKTREE_CONTEXT (passed to agent).
 ralph_setup_worktree() {
   local agent_key="$1" instance_num="$2"
-  local work_dir="/tmp/ralph-worktrees/${agent_key}-${instance_num}"
+  # Return values via globals (not stdout) to avoid $() subshell losing exports
+  RALPH_WORKTREE_DIR="/tmp/ralph-worktrees/${agent_key}-${instance_num}"
+  RALPH_WORKTREE_CONTEXT=""
 
-  if [[ ! -d "$work_dir" ]]; then
+  if [[ ! -d "$RALPH_WORKTREE_DIR" ]]; then
     local branch_name="ralph-workspace/${agent_key}-${instance_num}"
     # Remove stale worktree entry if git still tracks it
     git worktree prune 2>/dev/null || true
     # Delete stale branch if it exists but worktree is gone
     git branch -D "$branch_name" >/dev/null 2>&1 || true
-    git worktree add "$work_dir" -b "$branch_name" HEAD --quiet
+    git worktree add "$RALPH_WORKTREE_DIR" -b "$branch_name" HEAD --quiet
   fi
 
   # Restore tracked files that agents may have deleted (e.g. .mcp.json)
-  git -C "$work_dir" checkout HEAD -- .mcp.json 2>/dev/null || true
+  git -C "$RALPH_WORKTREE_DIR" checkout HEAD -- .mcp.json 2>/dev/null || true
 
   # Ensure the Jira MCP server is configured in the worktree
   if command -v ralph-jira-mcp &>/dev/null && command -v jq &>/dev/null; then
-    if [[ -f "$work_dir/.mcp.json" ]]; then
-      jq '.mcpServers.jira //= {"command": "ralph-jira-mcp"}' "$work_dir/.mcp.json" \
-        > "$work_dir/.mcp.json.tmp" && mv "$work_dir/.mcp.json.tmp" "$work_dir/.mcp.json"
+    if [[ -f "$RALPH_WORKTREE_DIR/.mcp.json" ]]; then
+      jq '.mcpServers.jira //= {"command": "ralph-jira-mcp"}' "$RALPH_WORKTREE_DIR/.mcp.json" \
+        > "$RALPH_WORKTREE_DIR/.mcp.json.tmp" && mv "$RALPH_WORKTREE_DIR/.mcp.json.tmp" "$RALPH_WORKTREE_DIR/.mcp.json"
     else
-      echo '{"mcpServers":{"jira":{"command":"ralph-jira-mcp"}}}' > "$work_dir/.mcp.json"
+      echo '{"mcpServers":{"jira":{"command":"ralph-jira-mcp"}}}' > "$RALPH_WORKTREE_DIR/.mcp.json"
     fi
   fi
 
@@ -166,22 +168,20 @@ ralph_setup_worktree() {
   # Priority: explicit RALPH_WORKTREE_SETUP > auto-detect scripts/worktree-setup.sh
   # Stdout is captured into RALPH_WORKTREE_CONTEXT for the agent; stderr passes through.
   local setup_cmd="${RALPH_WORKTREE_SETUP:-}"
-  if [[ -z "$setup_cmd" && -f "$work_dir/scripts/worktree-setup.sh" ]]; then
+  if [[ -z "$setup_cmd" && -f "$RALPH_WORKTREE_DIR/scripts/worktree-setup.sh" ]]; then
     setup_cmd="bash scripts/worktree-setup.sh"
   fi
   if [[ -n "$setup_cmd" ]]; then
-    ralph_log "Running worktree setup: $setup_cmd" >&2
+    ralph_log "Running worktree setup: $setup_cmd"
     local setup_output=""
-    setup_output=$(cd "$work_dir" && eval "$setup_cmd") || {
+    setup_output=$(cd "$RALPH_WORKTREE_DIR" && eval "$setup_cmd") || {
       ralph_error "Worktree setup failed (exit $?). Continuing anyway."
     }
     if [[ -n "$setup_output" ]]; then
-      export RALPH_WORKTREE_CONTEXT="$setup_output"
-      ralph_log "Worktree context captured (${#setup_output} bytes)" >&2
+      RALPH_WORKTREE_CONTEXT="$setup_output"
+      ralph_log "Worktree context captured (${#setup_output} bytes)"
     fi
   fi
-
-  echo "$work_dir"
 }
 
 # ralph_cleanup_worktree <work_dir>
