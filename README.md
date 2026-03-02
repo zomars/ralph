@@ -10,7 +10,7 @@ cd ralph
 npm link
 ```
 
-This installs all Ralph commands globally. Run them from any project directory.
+This installs the `ralph` command (and legacy `afk-*` aliases) globally. Run them from any project directory.
 
 To uninstall: `npm unlink -g ralph`
 
@@ -20,7 +20,7 @@ To uninstall: `npm unlink -g ralph`
 
 ```bash
 cd your-project
-ralph init          # Creates .ralphrc from template
+ralph init          # Creates .ralphrc + .mcp.json from templates
 # Edit .ralphrc with your credentials
 ralph config        # Verify configuration
 ```
@@ -49,41 +49,92 @@ Alternatively, set these as environment variables in your shell profile.
 
 ## Commands
 
+```
+ralph <command> [options]
+
+Agent commands (backlog-driven):
+  planner           Run the Planner agent
+  implementer       Run the Implementer agent
+  reviewer          Run the Reviewer agent
+  tester            Run the Tester agent
+  refactor          Run the Refactorer agent
+  documenter        Run the Documenter agent
+
+GitHub commands:
+  fixer             Respond to PR review feedback
+  merger            Auto-merge approved PRs
+
+Agent options:
+  --afk             Run in continuous poll loop (default)
+  --once            Run a single iteration, then exit
+
+Debugging:
+  debug <agent> [N] Tail a running agent's output (default: instance 1)
+    -f, --follow    Live tail (like tail -f)
+    -n, --lines N   Number of lines to show (default: 200)
+    --raw           Show raw JSON instead of rendered text
+
+Utility commands:
+  status            Show task counts and running instances for all agents
+  validate          Run routing validation (--matrix, --check-prompts, --check-loops, --check-all)
+  init              Create .ralphrc + .mcp.json in current directory
+  config            Show current configuration
+  version           Show version
+```
+
 ### Agent Loops
 
-Each agent runs an infinite poll loop: check backlog for tasks, invoke Claude, sleep, repeat.
+Each agent runs an infinite poll loop: check for work, invoke Claude, parse output, cooldown, repeat.
 
-| Command           | Role          | Trigger                                                  |
-| :---------------- | :------------ | :------------------------------------------------------- |
-| `afk-planner`     | Product Owner | Description empty/TODO, or label `needs-planning`        |
-| `afk-implementer` | Developer     | Status "To Do"/"In Progress", description filled         |
-| `afk-reviewer`    | QA/Lead       | Status "In Review"                                       |
-| `afk-tester`      | QA Engineer   | Label `needs-tests`, not Done                            |
-| `afk-refactor`    | Architect     | Label `tech-debt`                                        |
-| `afk-documenter`  | Tech Writer   | Status "Done", not yet documented                        |
+**Backlog-gated agents** poll a provider (Jira/file) for matching tasks:
 
-### Utility Commands
+| Command              | Role          | Trigger                                                  |
+| :------------------- | :------------ | :------------------------------------------------------- |
+| `ralph planner`      | Product Owner | Description empty/TODO, or label `needs-planning`        |
+| `ralph implementer`  | Developer     | Status "To Do"/"In Progress", description filled         |
+| `ralph reviewer`     | QA/Lead       | Status "In Review"                                       |
+| `ralph tester`       | QA Engineer   | Label `needs-tests`, not Done                            |
+| `ralph refactor`     | Architect     | Label `tech-debt`                                        |
+| `ralph documenter`   | Tech Writer   | Status "Done", not yet documented                        |
 
-| Command                | Description                                    |
-| :--------------------- | :--------------------------------------------- |
-| `afk-claude <N>`       | Run N iterations with the generic prompt        |
-| `afk-claude-gated`     | Generic gated loop (configurable via `RALPH_CUSTOM_QUERY`) |
-| `once-claude [prompt]`  | Single-run Claude session                      |
-| `validate-routing`     | Check routing.json for overlaps/gaps/drift     |
-| `ralph init`           | Create `.ralphrc` in current directory          |
-| `ralph config`         | Show current configuration                      |
-| `ralph version`        | Show version                                    |
+**GitHub-gated agents** poll for PRs via `gh` CLI:
+
+| Command              | Role          | Trigger                                                  |
+| :------------------- | :------------ | :------------------------------------------------------- |
+| `ralph fixer`        | Developer     | Open PRs with unresolved review threads                  |
+| `ralph merger`       | Release Eng   | Approved PRs passing all checks                          |
 
 ### Running a Full Team
 
 ```bash
 # Run each agent in a separate terminal tab:
-afk-planner        # Tab 1
-afk-implementer    # Tab 2
-afk-reviewer       # Tab 3
-afk-tester         # Tab 4
-afk-refactor       # Tab 5
-afk-documenter     # Tab 6
+ralph planner        # Tab 1
+ralph implementer    # Tab 2
+ralph reviewer       # Tab 3
+ralph tester         # Tab 4
+ralph refactor       # Tab 5
+ralph documenter     # Tab 6
+ralph fixer          # Tab 7
+ralph merger         # Tab 8
+```
+
+### Multi-Instance Support
+
+Agents claim numbered slots in `/tmp/ralph-{agent}/{n}`. Instance number determines which task to pick (instance 1 picks task 1, instance 2 picks task 2, etc.). Stale PIDs are auto-cleaned.
+
+```bash
+# Run two implementers in parallel (separate terminals):
+ralph implementer    # Picks task #1
+ralph implementer    # Picks task #2
+```
+
+### Debugging Running Agents
+
+```bash
+ralph debug implementer         # Last 200 lines of rendered output
+ralph debug implementer -f      # Live tail
+ralph debug implementer 2 --raw # Raw JSON from instance 2
+ralph status                    # Task counts + running instances overview
 ```
 
 ## Providers
@@ -92,7 +143,7 @@ Ralph abstracts the backlog system. Set `RALPH_PROVIDER` to switch providers.
 
 ### Supported Providers
 
-- **jira** (default) — Jira Cloud via REST API
+- **jira** (default) — Jira Cloud via a bundled MCP server (`ralph-jira-mcp`)
 - **file** — Local markdown file (prd.md)
 
 ### Provider Architecture
@@ -154,21 +205,17 @@ All agent routing rules live in `providers/<provider>/routing.json` — the sing
 ### Validating Routing
 
 ```bash
-# Check for overlaps and gaps (simulates ~168 ticket states)
-validate-routing
-
-# Full matrix — see which agents match every simulated state
-validate-routing --matrix
-
-# Check query drift between routing.json and prompt files
-validate-routing --check-prompts
+ralph validate                  # Simulates ~168 ticket states, reports overlaps/gaps
+ralph validate --matrix         # Full matrix — which agents match every simulated state
+ralph validate --check-prompts  # Detect query drift between routing.json and prompts
+ralph validate --check-loops    # Check self-loop risks
+ralph validate --check-all      # Run all checks
 ```
 
 When adding or modifying agent routing:
-1. Update `routing.json` (both `jql` and `rules`)
+1. Update `routing.json` (both `query` and `rules`)
 2. Update the corresponding `prompts/*.md` query to match
-3. Run `validate-routing` to verify no overlaps
-4. Run `validate-routing --check-prompts` to verify no drift
+3. Run `ralph validate --check-all` to verify
 
 ## Labels
 
@@ -195,30 +242,44 @@ When adding or modifying agent routing:
     - If untestable: adds `tech-debt`, removes `needs-tests`, moves to **To Do** (escalates to Refactorer).
 5.  **Refactorer** picks up `tech-debt`, refactors, removes `tech-debt`, moves to **In Review**.
 6.  **Documenter** picks up **Done** items (excludes `tech-debt`, `documented`), updates docs, adds `documented` label.
+7.  **Fixer** picks up open PRs with unresolved review threads, addresses feedback, pushes fixes.
+8.  **Merger** picks up approved PRs passing all checks, merges them.
 
 ## Project Structure
 
 ```
 ralph/
-├── bin/                          # Executable CLI commands
+├── bin/
+│   ├── ralph                    # Main CLI entry point
+│   ├── afk-*                    # Legacy aliases (delegate to ralph)
+│   └── validate-routing*        # Routing validation scripts
 ├── lib/
-│   ├── ralph-core.sh             # Shared functions
-│   ├── ralph-gated-loop.sh       # Parameterized backlog-gated loop
-│   ├── ralph-iter-loop.sh        # Parameterized N-iteration loop
+│   ├── ralph-core.sh            # Shared functions
+│   ├── ralph-gated-loop.sh      # Backlog-gated poll loop
+│   ├── ralph-github-loop.sh     # GitHub-gated poll loop (fixer, merger)
 │   └── providers/
-│       ├── jira.sh               # Jira provider implementation
-│       ├── file.sh               # File provider implementation
-│       └── file-query.awk        # File query parser
-├── prompts/                      # Provider-agnostic workflow prompts
+│       ├── jira.sh              # Jira provider implementation
+│       ├── file.sh              # File provider implementation
+│       └── file-query.awk       # File query parser
+├── prompts/                     # Provider-agnostic workflow prompts
+│   ├── planner.md
+│   ├── implementer.md
+│   ├── reviewer.md
+│   ├── tester.md
+│   ├── refactor.md
+│   ├── documenter.md
+│   ├── fixer.md
+│   └── merger.md
 ├── providers/
 │   ├── jira/
-│   │   ├── instructions.md       # Jira MCP tool mappings
-│   │   └── routing.json          # Jira queries + validation rules
+│   │   ├── instructions.md      # Jira MCP tool mappings
+│   │   ├── routing.json         # Jira queries + validation rules
+│   │   └── mcp-server.mjs       # Bundled Jira MCP server
 │   └── file/
-│       ├── instructions.md       # File provider instructions
-│       └── routing.json          # File queries + validation rules
+│       ├── instructions.md      # File provider instructions
+│       └── routing.json         # File queries + validation rules
 ├── examples/
-│   └── prd.md                    # Example PRD template for file provider
+│   └── prd.md                   # Example PRD template for file provider
 ├── package.json
 ├── .ralphrc.example
 └── README.md
