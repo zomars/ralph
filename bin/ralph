@@ -111,8 +111,8 @@ cmd_status() {
   # ── Gather Jira task counts ──────────────────────────────────────────────
   typeset -A task_counts
   ralph_validate_env $PROVIDER_ENV_VARS
+  local query
   for agent in "${jira_agents[@]}"; do
-    local query
     query="$(ralph_get_query "$agent")"
     task_counts[$agent]=$(provider_check_tasks "$query")
   done
@@ -129,9 +129,10 @@ cmd_status() {
 
   # ── Count running instances per agent ───────────────────────────────────
   typeset -A running_counts
+  local count base_dir
   for agent in "${all_agents[@]}"; do
-    local count=0
-    local base_dir="/tmp/ralph-${agent}"
+    count=0
+    base_dir="/tmp/ralph-${agent}"
     if [[ -d "$base_dir" ]]; then
       for pidfile in "$base_dir"/*/pid(N); do
         if kill -0 "$(cat "$pidfile")" 2>/dev/null; then
@@ -151,9 +152,10 @@ cmd_status() {
   printf "%-14s %5s  %7s\n" "Agent" "Tasks" "Running"
   printf "%.0s─" {1..30}; echo
 
+  local t r
   for agent in "${all_agents[@]}"; do
-    local t="${task_counts[$agent]:-0}"
-    local r="${running_counts[$agent]:-0}"
+    t="${task_counts[$agent]:-0}"
+    r="${running_counts[$agent]:-0}"
     printf "%-14s %5s  %7s\n" "$agent" "$t" "$r"
     [[ "$t" =~ ^[0-9]+$ ]] && total_tasks=$((total_tasks + t))
     total_running=$((total_running + r))
