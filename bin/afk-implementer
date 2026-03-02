@@ -1,3 +1,0 @@
-#!/bin/zsh
-echo "afk-implementer is deprecated. Use: ralph implementer [--once|--afk]" >&2
-exit 1

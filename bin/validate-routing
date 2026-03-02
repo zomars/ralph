@@ -1,3 +1,0 @@
-#!/bin/bash
-echo "validate-routing is deprecated. Use: ralph validate [--check-all|--matrix|--check-prompts|--check-loops]" >&2
-exit 1

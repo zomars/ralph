@@ -1,3 +1,0 @@
-#!/bin/zsh
-echo "afk-tester is deprecated. Use: ralph tester [--once|--afk]" >&2
-exit 1

@@ -1,3 +1,0 @@
-#!/bin/zsh
-echo "afk-refactor is deprecated. Use: ralph refactor [--once|--afk]" >&2
-exit 1

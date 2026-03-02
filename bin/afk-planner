@@ -1,3 +1,0 @@
-#!/bin/zsh
-echo "afk-planner is deprecated. Use: ralph planner [--once|--afk]" >&2
-exit 1

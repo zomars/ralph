@@ -1,3 +1,0 @@
-#!/bin/zsh
-echo "afk-documenter is deprecated. Use: ralph documenter [--once|--afk]" >&2
-exit 1
