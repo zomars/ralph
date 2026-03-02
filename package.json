@@ -4,13 +4,6 @@
   "description": "Autonomous agent ecosystem for backlog-driven SDLC",
   "bin": {
     "ralph": "./bin/ralph",
-    "afk-planner": "./bin/afk-planner",
-    "afk-implementer": "./bin/afk-implementer",
-    "afk-reviewer": "./bin/afk-reviewer",
-    "afk-tester": "./bin/afk-tester",
-    "afk-refactor": "./bin/afk-refactor",
-    "afk-documenter": "./bin/afk-documenter",
-    "validate-routing": "./bin/validate-routing",
     "ralph-jira-mcp": "./providers/jira/mcp-server.mjs"
   },
   "dependencies": {

@@ -21,8 +21,6 @@ ralph init                      # Create .ralphrc in CWD
 ralph config                    # Show current config
 ```
 
-Legacy shortcuts (`afk-planner`, `afk-implementer`, etc.) delegate to `ralph`.
-
 ## Architecture
 
 ### Two Loop Types
@@ -55,7 +53,7 @@ Agents claim numbered slots in `/tmp/ralph-{agent}/{n}`. Instance number determi
 ## Shell Conventions
 
 - `#!/bin/zsh` for all agent scripts (zsh can reliably kill running Claude subprocesses; bash cannot)
-- `#!/bin/bash` only for `validate-routing` (doesn't manage Claude processes)
+- `#!/bin/bash` only for `validate-routing-impl` (doesn't manage Claude processes)
 - `realpath "$0"` resolves through npm symlinks to find `RALPH_HOME`
 - `.ralphrc` is **sourced** (not parsed) — it's a shell script exporting env vars
 

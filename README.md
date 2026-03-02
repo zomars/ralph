@@ -10,7 +10,7 @@ cd ralph
 npm link
 ```
 
-This installs the `ralph` command (and legacy `afk-*` aliases) globally. Run them from any project directory.
+This installs the `ralph` command globally. Run it from any project directory.
 
 To uninstall: `npm unlink -g ralph`
 
@@ -250,9 +250,7 @@ When adding or modifying agent routing:
 ```
 ralph/
 ├── bin/
-│   ├── ralph                    # Main CLI entry point
-│   ├── afk-*                    # Legacy aliases (delegate to ralph)
-│   └── validate-routing*        # Routing validation scripts
+│   └── ralph                    # CLI entry point
 ├── lib/
 │   ├── ralph-core.sh            # Shared functions
 │   ├── ralph-gated-loop.sh      # Backlog-gated poll loop
