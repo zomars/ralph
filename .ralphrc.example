@@ -1,4 +1,4 @@
-# Backlog provider (jira, file)
+# Backlog provider (jira, linear, file)
 export RALPH_PROVIDER="jira"
 
 # Model provider (claude, gemini, codex)
@@ -8,6 +8,10 @@ export RALPH_MODEL_PROVIDER="claude"
 export JIRA_EMAIL="you@example.com"
 export JIRA_API_TOKEN="your-api-token"
 export JIRA_BASE_URL="https://yourorg.atlassian.net"
+
+# Linear-specific (when RALPH_PROVIDER=linear)
+# export LINEAR_API_KEY="lin_api_xxxxx"
+# export LINEAR_TEAM_KEY="ENG"
 
 # File-specific (when RALPH_PROVIDER=file)
 # export RALPH_PRD_FILE="./prd.md"  # Optional, defaults to ./prd.md

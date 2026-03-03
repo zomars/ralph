@@ -4,7 +4,8 @@
   "description": "Autonomous agent ecosystem for backlog-driven SDLC",
   "bin": {
     "ralph": "./bin/ralph",
-    "ralph-jira-mcp": "./providers/jira/mcp-server.mjs"
+    "ralph-jira-mcp": "./providers/jira/mcp-server.mjs",
+    "ralph-linear-mcp": "./providers/linear/mcp-server.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",
