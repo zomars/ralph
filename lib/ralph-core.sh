@@ -148,7 +148,12 @@ ralph_setup_worktree() {
     git worktree prune 2>/dev/null || true
     # Delete stale branch if it exists but worktree is gone
     git branch -D "$branch_name" >/dev/null 2>&1 || true
-    git worktree add "$RALPH_WORKTREE_DIR" -b "$branch_name" HEAD --quiet
+    if git show-ref --verify --quiet "refs/heads/$branch_name"; then
+      # Branch couldn't be deleted (e.g. checked out in main repo) — reuse it
+      git worktree add "$RALPH_WORKTREE_DIR" "$branch_name" --quiet
+    else
+      git worktree add "$RALPH_WORKTREE_DIR" -b "$branch_name" HEAD --quiet
+    fi
   fi
 
   # Restore tracked files that agents may have deleted (e.g. .mcp.json)
