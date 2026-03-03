@@ -121,6 +121,9 @@ ralph_fetch_mergeable_prs() {
             baseRefName
             isDraft
             mergeable
+            reviewThreads(first: 100) {
+              nodes { isResolved }
+            }
             commits(last: 1) {
               nodes {
                 commit {
@@ -142,6 +145,7 @@ ralph_fetch_mergeable_prs() {
     }" --jq '[.data.search.nodes[] |
       select(.isDraft == false) |
       select(.mergeable == "MERGEABLE") |
+      select([.reviewThreads.nodes[] | select(.isResolved == false)] | length == 0) |
       (.commits.nodes[0].commit.statusCheckRollup) as $rollup |
       select($rollup.state == "SUCCESS") |
       select([$rollup.contexts.nodes[] |

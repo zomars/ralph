@@ -16,17 +16,18 @@ No PR → `<promise>COMPLETE</promise>`.
 
 Fetch current state:
 ```bash
-gh pr view <number> --json mergeable,statusCheckRollup,labels
+gh pr view <number> --json mergeable,statusCheckRollup,labels,reviewThreads
 ```
 
 Verify:
 - Mergeable (no conflicts)
 - CI green (all status checks passing — no `IN_PROGRESS`, `PENDING`, or `QUEUED`)
 - Merge label present (`ready-to-merge`)
+- No unresolved review threads (`reviewThreads` all have `isResolved: true`)
 
 If ANY condition fails → `<promise>COMPLETE</promise>` (do NOT remove the label or comment — the guard will re-check on the next poll once CI finishes).
 
-**Exception**: If the PR has merge conflicts or the label is missing, remove the label and comment why — those won't self-resolve.
+**Exception**: If the PR has merge conflicts, unresolved review threads, or the label is missing, remove the label and comment why — those won't self-resolve.
 
 ## 2. Merge
 
