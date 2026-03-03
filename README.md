@@ -235,18 +235,17 @@ When adding or modifying agent routing:
 ## Workflow
 
 1.  **Planner** finds empty/TODO tickets (or `needs-planning`), adds specs, moves to **To Do**.
-2.  **Implementer** picks up **To Do** (excludes `needs-tests`, `tech-debt`, `ralph-blocked`, `needs-planning`), writes code, moves to **In Review**.
-3.  **Reviewer** checks code (excludes `needs-planning`, `needs-tests`, `tech-debt`):
-    - **Approve**: Moves to **Done**.
-    - **Reject**: Moves back to **In Progress** (Implementer re-picks).
-    - **Needs Tests**: Adds `needs-tests` -> **To Do** (Tester picks up).
-    - **Tech Debt**: Adds `tech-debt` -> **Done** (Refactorer picks up; Documenter waits).
-4.  **Tester** picks up `needs-tests` (not Done), adds tests, removes `needs-tests`, moves to **In Review**.
-    - If untestable: adds `tech-debt`, removes `needs-tests`, moves to **To Do** (escalates to Refactorer).
+2.  **Implementer** picks up **To Do**/**In Progress** (excludes `needs-tests`, `tech-debt`, `ralph-blocked`, `needs-planning`, `needs-input`; skips tasks blocked by unfinished dependencies), writes code, moves to **In Review** once verified with evidence.
+3.  **Reviewer** checks code in **In Review** (excludes `needs-planning`, `needs-tests`, `tech-debt`, `needs-input`, `ready-to-merge`):
+    - **Approve**: Adds `ready-to-merge` label to PR and ticket, stays **In Review** (Merger picks up).
+    - **Reject**: Moves back to **In Progress** (Implementer re-picks), optionally adds `ralph-failed`.
+    - **Needs Tests**: Adds `needs-tests`, moves to **To Do** (Tester picks up).
+    - **Tech Debt**: Adds `tech-debt` + `ready-to-merge` to PR, stays **In Review** (Merger merges; Refactorer picks up tech-debt later).
+4.  **Tester** picks up `needs-tests` (not Done), removes `needs-tests`, adds test evidence with screenshots, moves to **In Review**.
 5.  **Refactorer** picks up `tech-debt`, refactors, removes `tech-debt`, moves to **In Review**.
-6.  **Documenter** picks up **Done** items (excludes `tech-debt`, `documented`), updates docs, adds `documented` label.
+6.  **Documenter** picks up **Done** items (excludes `tech-debt`, `documented`, `needs-input`), updates docs, adds `documented` label.
 7.  **Fixer** picks up open PRs with unresolved review threads, addresses feedback, pushes fixes.
-8.  **Merger** picks up approved PRs passing all checks, merges them.
+8.  **Merger** picks up PRs with `ready-to-merge` label + passing CI, squash-merges, transitions ticket to **Done**.
 
 ## Project Structure
 
