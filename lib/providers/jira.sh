@@ -8,6 +8,10 @@
 # Required env vars for this provider
 PROVIDER_ENV_VARS=(JIRA_EMAIL JIRA_API_TOKEN JIRA_BASE_URL)
 
+# MCP server required by this provider
+PROVIDER_MCP_NAME=jira
+PROVIDER_MCP_CMD=ralph-jira-mcp
+
 # Check if tasks exist for the given query
 # Args: $1 = JQL query string
 # Returns: task count (0 = no tasks)

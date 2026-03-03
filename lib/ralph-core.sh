@@ -156,18 +156,19 @@ ralph_setup_worktree() {
     fi
   fi
 
-  # Restore tracked files that agents may have deleted (e.g. .mcp.json)
-  git -C "$RALPH_WORKTREE_DIR" checkout HEAD -- .mcp.json 2>/dev/null || true
+  # Build .mcp.json: start from project's copy (or empty), layer provider MCP on top,
+  # then commit so reset --hard between iterations preserves it.
+  git show HEAD:.mcp.json > "$RALPH_WORKTREE_DIR/.mcp.json" 2>/dev/null \
+    || echo '{}' > "$RALPH_WORKTREE_DIR/.mcp.json"
 
-  # Ensure the Jira MCP server is configured in the worktree
-  if command -v ralph-jira-mcp &>/dev/null && command -v jq &>/dev/null; then
-    if [[ -f "$RALPH_WORKTREE_DIR/.mcp.json" ]]; then
-      jq '.mcpServers.jira //= {"command": "ralph-jira-mcp"}' "$RALPH_WORKTREE_DIR/.mcp.json" \
-        > "$RALPH_WORKTREE_DIR/.mcp.json.tmp" && mv "$RALPH_WORKTREE_DIR/.mcp.json.tmp" "$RALPH_WORKTREE_DIR/.mcp.json"
-    else
-      echo '{"mcpServers":{"jira":{"command":"ralph-jira-mcp"}}}' > "$RALPH_WORKTREE_DIR/.mcp.json"
-    fi
+  if [[ -n "${PROVIDER_MCP_NAME:-}" ]] && command -v "${PROVIDER_MCP_CMD:-}" &>/dev/null; then
+    jq --arg n "$PROVIDER_MCP_NAME" --arg c "$PROVIDER_MCP_CMD" \
+      '.mcpServers[$n] = {"command": $c}' "$RALPH_WORKTREE_DIR/.mcp.json" \
+      > "$RALPH_WORKTREE_DIR/.mcp.json.tmp" && mv "$RALPH_WORKTREE_DIR/.mcp.json.tmp" "$RALPH_WORKTREE_DIR/.mcp.json"
   fi
+
+  git -C "$RALPH_WORKTREE_DIR" add .mcp.json \
+    && git -C "$RALPH_WORKTREE_DIR" commit --no-verify -m "ralph: configure MCP servers" 2>/dev/null || true
 
   # Run project-specific worktree setup.
   # Priority: explicit RALPH_WORKTREE_SETUP > auto-detect scripts/worktree-setup.sh
