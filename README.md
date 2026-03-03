@@ -2,6 +2,9 @@
 
 Ralph is a suite of autonomous agents that orchestrate Claude CLI for backlog-driven SDLC automation. Each agent acts as a specialized team member, picking up tasks from your backlog based on specific criteria.
 
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/48544de9-1619-4341-9d79-31cd5e960ff6" />
+
+
 ## Install
 
 ```bash
