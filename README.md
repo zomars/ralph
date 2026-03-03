@@ -234,6 +234,49 @@ When adding or modifying agent routing:
 
 ## Workflow
 
+```mermaid
+flowchart TD
+    NEW["🎫 New Ticket<br/><i>empty description</i>"] --> PLANNER["🗺️ Planner"]
+    PLANNER -->|"fills spec"| TODO["📋 To Do"]
+    PLANNER -->|"unclear requirements"| BLOCKED_INPUT["⏸️ needs-input<br/><i>waiting for human</i>"]
+
+    TODO --> IMPL["⚡ Implementer"]
+    IMPL -->|"code + evidence"| IN_REVIEW["🔍 In Review"]
+    IMPL -->|"dependency blocker"| BLOCKED_DEP["⏸️ ralph-blocked"]
+
+    IN_REVIEW --> REVIEWER["👀 Reviewer"]
+
+    REVIEWER -->|"✅ approve"| READY["🏷️ ready-to-merge"]
+    REVIEWER -->|"❌ reject"| IN_PROGRESS["🔄 In Progress"]
+    REVIEWER -->|"🧪 needs tests"| TESTER["🧪 Tester"]
+    REVIEWER -->|"🧹 tech debt"| TECH["🏷️ tech-debt +<br/>ready-to-merge"]
+
+    IN_PROGRESS --> IMPL
+
+    TESTER -->|"test report +<br/>screenshots"| IN_REVIEW
+
+    TECH --> MERGER2["🚀 Merger"]
+    TECH --> REFACTOR["♻️ Refactorer"]
+    REFACTOR -->|"refactored"| IN_REVIEW
+
+    READY --> MERGER["🚀 Merger"]
+    MERGER -->|"squash merge"| DONE["✅ Done"]
+    MERGER2 -->|"squash merge"| DONE
+
+    DONE --> DOCS["📝 Documenter"]
+    DOCS -->|"adds documented label"| FINAL["🏁 Done + documented"]
+
+    PR_FEEDBACK["💬 PR Review Threads"] --> FIXER["🔧 Fixer"]
+    FIXER -->|"pushes fixes"| PR_FEEDBACK
+
+    style NEW fill:#e1f5fe
+    style FINAL fill:#c8e6c9
+    style BLOCKED_INPUT fill:#fff3e0
+    style BLOCKED_DEP fill:#fff3e0
+    style IN_REVIEW fill:#f3e5f5
+    style DONE fill:#c8e6c9
+```
+
 1.  **Planner** finds empty/TODO tickets (or `needs-planning`), adds specs, moves to **To Do**.
 2.  **Implementer** picks up **To Do**/**In Progress** (excludes `needs-tests`, `tech-debt`, `ralph-blocked`, `needs-planning`, `needs-input`; skips tasks blocked by unfinished dependencies), writes code, moves to **In Review** once verified with evidence.
 3.  **Reviewer** checks code in **In Review** (excludes `needs-planning`, `needs-tests`, `tech-debt`, `needs-input`, `ready-to-merge`):
