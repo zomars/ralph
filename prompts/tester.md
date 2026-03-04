@@ -20,8 +20,7 @@ Every task gets browser verification. Integration and unit tests are added when 
 
 ## 1. Load Context
 
-1. Find assigned test tasks using the backlog search tool.
-   - **JQL**: `assignee = currentUser() AND labels = "needs-tests" AND (labels is EMPTY OR labels not in ("needs-planning", "needs-input")) AND status != "Done" ORDER BY priority DESC`
+1. Find assigned test tasks using the backlog search tool with the query provided in the initial message.
    - **IMPORTANT**: Set `maxResults` to your instance number (from the user message, e.g. "instance 2" → `maxResults=2`). Default to `maxResults=1` if no instance number is given.
 2. Read last 10 RALPH commits.
 

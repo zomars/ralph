@@ -133,3 +133,71 @@ _linear_build_filter() {
 
   echo "{$joined}"
 }
+
+# Generate DSL query from rules in routing.json
+# Args: $1 = agent key
+# Returns: DSL string for _linear_build_filter()
+provider_rules_to_query() {
+  local agent="$1"
+  local routing_json
+  routing_json="$(ralph_get_routing_json)"
+  local rules
+  rules=$(jq -c ".agents.${agent}.rules" "$routing_json")
+
+  local parts=()
+  parts+=('assignee:me')
+
+  # status_in — check if negative form is shorter
+  local all_statuses status_in_count all_count
+  all_statuses=$(jq -r '.statuses | length' "$routing_json")
+  status_in_count=$(echo "$rules" | jq -r '.status_in | length')
+
+  if (( status_in_count == all_statuses )); then
+    : # all statuses — no filter needed
+  elif (( all_statuses - status_in_count < status_in_count )); then
+    # Negative form is shorter — compute excluded statuses
+    local excluded
+    excluded=$(jq -r --argjson inc "$(echo "$rules" | jq '.status_in')" \
+      '[.statuses[] | select(. as $s | $inc | index($s) | not)] | map(gsub(" "; "+")) | join(",")' "$routing_json")
+    parts+=("!state:$excluded")
+  else
+    local included
+    included=$(echo "$rules" | jq -r '.status_in | map(gsub(" "; "+")) | join(",")')
+    parts+=("state:$included")
+  fi
+
+  # labels_include
+  local labels_include
+  labels_include=$(echo "$rules" | jq -r '.labels_include // null')
+  if [[ "$labels_include" != "null" ]]; then
+    local inc_list
+    inc_list=$(echo "$rules" | jq -r '.labels_include | join(",")')
+    parts+=("label:$inc_list")
+  fi
+
+  # labels_exclude
+  local labels_exclude
+  labels_exclude=$(echo "$rules" | jq -r '.labels_exclude // null')
+  if [[ "$labels_exclude" != "null" ]]; then
+    local exc_list
+    exc_list=$(echo "$rules" | jq -r '.labels_exclude | join(",")')
+    parts+=("!label:$exc_list")
+  fi
+
+  # description_condition
+  local desc_cond
+  desc_cond=$(echo "$rules" | jq -r '.description_condition // "null"')
+  case "$desc_cond" in
+    not_empty_and_not_todo) parts+=('!description:empty') ;;
+    # empty_or_todo_or_label_needs_planning — not directly filterable in Linear
+  esac
+
+  # exclude_blocked
+  local exclude_blocked
+  exclude_blocked=$(echo "$rules" | jq -r '.exclude_blocked // false')
+  if [[ "$exclude_blocked" == "true" ]]; then
+    parts+=('!blocked')
+  fi
+
+  echo "${parts[*]}"
+}

@@ -20,7 +20,6 @@
   "global_label_excludes": ["needs-input"],
   "agents": {
     "planner": {
-      "query": "assignee:me state:Todo,In+Progress !label:needs-input,needs-tests,tech-debt,ralph-blocked,ralph-failed,documented",
       "adds_labels": ["needs-input", "needs-tests"],
       "rules": {
         "status_in": ["Todo", "In Progress"],
@@ -32,19 +31,18 @@
       "prompt": "prompts/planner.md"
     },
     "implementer": {
-      "query": "assignee:me state:Todo,In+Progress !description:empty !label:needs-tests,tech-debt,ralph-blocked,needs-planning,needs-input",
       "adds_labels": ["ralph-blocked"],
       "rules": {
         "status_in": ["Todo", "In Progress"],
         "labels_include": null,
         "labels_exclude": ["needs-tests", "tech-debt", "ralph-blocked", "needs-planning", "needs-input"],
-        "description_condition": "not_empty_and_not_todo"
+        "description_condition": "not_empty_and_not_todo",
+        "exclude_blocked": true
       },
       "script": "bin/afk-implementer",
       "prompt": "prompts/implementer.md"
     },
     "reviewer": {
-      "query": "assignee:me state:In+Review !label:needs-planning,needs-tests,tech-debt,needs-input,ready-to-merge",
       "adds_labels": ["ralph-failed", "needs-tests", "tech-debt", "ready-to-merge"],
       "rules": {
         "status_in": ["In Review"],
@@ -56,8 +54,6 @@
       "prompt": "prompts/reviewer.md"
     },
     "tester": {
-      "query": "assignee:me label:needs-tests !label:needs-planning,needs-input !state:Done,Canceled",
-
       "adds_labels": ["tech-debt"],
       "rules": {
         "status_in": ["Triage", "Todo", "In Progress", "In Review"],
@@ -69,7 +65,6 @@
       "prompt": "prompts/tester.md"
     },
     "refactor": {
-      "query": "assignee:me label:tech-debt !label:needs-planning,needs-input,needs-tests",
       "adds_labels": [],
       "rules": {
         "status_in": ["Triage", "Todo", "In Progress", "In Review", "Done", "Canceled"],
@@ -81,7 +76,6 @@
       "prompt": "prompts/refactor.md"
     },
     "documenter": {
-      "query": "assignee:me state:Done !label:documented,tech-debt,needs-input",
       "adds_labels": ["documented"],
       "rules": {
         "status_in": ["Done"],

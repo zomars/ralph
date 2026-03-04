@@ -270,20 +270,9 @@ ralph_load_provider() {
 
 ralph_get_query() {
   local agent="$1"
-  local routing_json
-  routing_json="$(ralph_get_routing_json)"
-  if [[ ! -f "$routing_json" ]]; then
-    ralph_error "Routing config not found: $routing_json"
-    exit 1
-  fi
-  # Try 'query' field first, fallback to 'jql' for backward compatibility
-  local query=$(jq -r ".agents.${agent}.query // .agents.${agent}.jql" "$routing_json")
-  echo "$query"
-}
-
-# Deprecated: use ralph_get_query() instead
-ralph_get_jql() {
-  ralph_get_query "$@"
+  # Generate query from rules via the provider's rules_to_query function.
+  # The provider must be sourced before calling this (see ralph-gated-loop.sh).
+  provider_rules_to_query "$agent"
 }
 
 

@@ -150,7 +150,9 @@ ralph_gated_loop() {
 Worktree setup output (use this for ports, domains, and dev environment details):
 $RALPH_WORKTREE_CONTEXT"
     fi
-    initial_message="You are RALPH_${(U)agent_key}, instance $instance_num. Your worktree is: $work_dir (project root: $project_dir). Execute your workflow now. Start with Step 1.${worktree_context}"
+    initial_message="You are RALPH_${(U)agent_key}, instance $instance_num. Your worktree is: $work_dir (project root: $project_dir).
+Search query: $query
+Execute your workflow now. Start with Step 1.${worktree_context}"
 
     local max_iteration_seconds="${RALPH_MAX_ITERATION_SECONDS:-1800}"
 

@@ -11,8 +11,7 @@
 
 ## 1. Load Context
 
-1. Find assigned planning tasks using the backlog search tool.
-   - **JQL**: `assignee = currentUser() AND ((description is EMPTY OR description ~ "TODO") OR labels = "needs-planning") AND (labels is EMPTY OR labels not in ("needs-input", "needs-tests", "tech-debt", "ralph-blocked", "ralph-failed", "documented")) AND status in ("To Do", "In Progress") ORDER BY createdDate DESC`
+1. Find assigned planning tasks using the backlog search tool with the query provided in the initial message.
    - **IMPORTANT**: Set `maxResults=1` to avoid reading too much data.
 2. Read last 10 RALPH commits.
 

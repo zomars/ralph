@@ -222,76 +222,321 @@ run_simulation() {
 check_prompts() {
   local exit_code=0
 
-  echo "Checking JQL drift between routing.json and prompt files..."
+  echo "Checking that prompts do not contain hardcoded queries..."
   echo ""
 
-  # Prompt drift check only applies to Jira provider (prompts embed JQL).
-  # Non-Jira providers use a different query syntax not embedded in prompts.
-  local has_jql
-  has_jql=$(jq -r '.agents | to_entries[0].value | has("jql")' "$ROUTING_JSON")
-  if [ "$has_jql" != "true" ]; then
-    echo "  Skipping — provider uses 'query' format (prompts embed JQL only)."
-    echo ""
-    echo "PASS: Prompt drift check not applicable for this provider."
-    return 0
-  fi
+  # Prompts should reference "the query provided in the initial message" instead
+  # of embedding provider-specific queries like JQL or DSL strings.
+  local hardcoded_patterns=(
+    'assignee = currentUser()'
+    'assignee:me'
+    'status:to-do'
+    'state:Todo'
+  )
 
   local agent
   for agent in $(get_agents); do
-    local json_jql
     local prompt_file
-    json_jql=$(jq -r ".agents.${agent}.jql" "$ROUTING_JSON")
     prompt_file=$(jq -r ".agents.${agent}.prompt" "$ROUTING_JSON")
 
     local full_prompt_path="$RALPH_HOME/$prompt_file"
     if [ ! -f "$full_prompt_path" ]; then
-      echo "WARNING: Prompt file not found: $prompt_file"
+      echo "  $agent: WARNING — prompt file not found: $prompt_file"
       exit_code=1
       continue
     fi
 
-    local prompt_jql=""
-    prompt_jql=$(sed -n 's/.*\*\*JQL\*\*: `\(.*\)`$/\1/p' "$full_prompt_path" 2>/dev/null | head -1 || true)
+    local found_hardcoded=0
+    local pattern
+    for pattern in "${hardcoded_patterns[@]}"; do
+      if grep -qF "$pattern" "$full_prompt_path"; then
+        if [ "$found_hardcoded" -eq 0 ]; then
+          echo "  $agent: FAIL — prompt contains hardcoded query"
+          found_hardcoded=1
+        fi
+        echo "    found: $pattern"
+        exit_code=1
+      fi
+    done
 
-    if [ -z "$prompt_jql" ]; then
-      prompt_jql=$(sed -n '/\*\*JQL\*\*/{n;p;}' "$full_prompt_path" 2>/dev/null | head -1 | sed 's/^[[:space:]]*//' | sed 's/`//g' || true)
-    fi
-
-    if [ -z "$prompt_jql" ]; then
-      prompt_jql=$(sed -n '/with JQL:/{n;p;}' "$full_prompt_path" 2>/dev/null | head -1 | sed 's/^[[:space:]]*//' | sed 's/`//g' || true)
-    fi
-
-    if [ -z "$prompt_jql" ]; then
-      prompt_jql=$(grep 'assignee = currentUser()' "$full_prompt_path" 2>/dev/null | grep '`' | head -1 | sed 's/^[[:space:]]*//' | sed 's/`//g' || true)
-    fi
-
-    if [ -z "$prompt_jql" ]; then
-      echo "WARNING: Could not extract JQL from $prompt_file for agent '$agent'"
-      exit_code=1
-      continue
-    fi
-
-    local norm_json
-    local norm_prompt
-    norm_json=$(echo "$json_jql" | sed "s/'/\"/g")
-    norm_prompt=$(echo "$prompt_jql" | sed "s/'/\"/g")
-
-    if [ "$norm_json" = "$norm_prompt" ]; then
-      echo "  $agent: OK"
+    # Check that prompt references the initial message query
+    if grep -q "query provided in the initial message" "$full_prompt_path"; then
+      if [ "$found_hardcoded" -eq 0 ]; then
+        echo "  $agent: OK"
+      fi
     else
-      echo "  $agent: DRIFT DETECTED"
-      echo "    routing.json: $json_jql"
-      echo "    $prompt_file: $prompt_jql"
-      echo ""
-      exit_code=1
+      echo "  $agent: WARN — prompt does not reference 'query provided in the initial message'"
     fi
   done
 
   echo ""
   if [ "$exit_code" -eq 0 ]; then
-    echo "PASS: No JQL drift detected."
+    echo "PASS: No hardcoded queries found in prompts."
   else
-    echo "FAIL: JQL drift detected. Update routing.json or prompt files to match."
+    echo "FAIL: Prompts contain hardcoded queries. Replace with 'the query provided in the initial message'."
+  fi
+
+  return $exit_code
+}
+
+check_queries() {
+  local exit_code=0
+
+  echo "Checking generated queries from rules..."
+  echo ""
+
+  # Verify zsh is available (generators use zsh)
+  if ! command -v zsh &>/dev/null; then
+    echo "  SKIP: zsh not available (required for query generation)"
+    return 0
+  fi
+
+  local providers=()
+  # Detect available providers by looking for routing.json files
+  local p
+  for p in "$RALPH_HOME"/providers/*/routing.json; do
+    local pname
+    pname=$(basename "$(dirname "$p")")
+    providers+=("$pname")
+  done
+
+  local provider
+  for provider in "${providers[@]}"; do
+    echo "  Provider: $provider"
+
+    local provider_script="$RALPH_HOME/lib/providers/${provider}.sh"
+    if [ ! -f "$provider_script" ]; then
+      echo "    SKIP — provider script not found: $provider_script"
+      continue
+    fi
+
+    local routing="$RALPH_HOME/providers/$provider/routing.json"
+
+    local agent
+    for agent in $(jq -r '.agents | keys[]' "$routing"); do
+      local query
+      # Generate query via zsh (providers use zsh)
+      query=$(zsh -c "
+        RALPH_HOME='$RALPH_HOME'
+        source '$RALPH_HOME/lib/ralph-core.sh'
+        ralph_init
+        RALPH_PROVIDER='$provider'
+        source '$provider_script'
+        provider_rules_to_query '$agent'
+      " 2>/dev/null)
+
+      if [ -z "$query" ]; then
+        echo "    $agent: FAIL — generator returned empty query"
+        exit_code=1
+        continue
+      fi
+
+      # Structural validation per provider
+      case "$provider" in
+        jira)
+          # Check for balanced parentheses
+          local open close
+          open=$(echo "$query" | tr -cd '(' | wc -c | tr -d ' ')
+          close=$(echo "$query" | tr -cd ')' | wc -c | tr -d ' ')
+          if [ "$open" -ne "$close" ]; then
+            echo "    $agent: FAIL — unbalanced parentheses (open=$open, close=$close)"
+            exit_code=1
+            continue
+          fi
+          # Check for required JQL elements
+          if ! echo "$query" | grep -q 'assignee = currentUser()'; then
+            echo "    $agent: FAIL — missing 'assignee = currentUser()'"
+            exit_code=1
+            continue
+          fi
+          echo "    $agent: OK — $query"
+          ;;
+        linear)
+          # Verify it produces valid JSON through _linear_build_filter
+          local filter
+          filter=$(zsh -c "
+            RALPH_HOME='$RALPH_HOME'
+            source '$RALPH_HOME/lib/ralph-core.sh'
+            ralph_init
+            RALPH_PROVIDER='$provider'
+            LINEAR_TEAM_KEY=TEST
+            source '$provider_script'
+            _linear_build_filter '$query'
+          " 2>/dev/null)
+          if [ -z "$filter" ]; then
+            echo "    $agent: FAIL — _linear_build_filter returned empty"
+            exit_code=1
+            continue
+          fi
+          if ! echo "$filter" | jq . >/dev/null 2>&1; then
+            echo "    $agent: FAIL — _linear_build_filter produced invalid JSON: $filter"
+            exit_code=1
+            continue
+          fi
+          echo "    $agent: OK — $query"
+          ;;
+        file)
+          # Run through file-query.awk with a synthetic test file
+          local test_prd
+          test_prd=$(mktemp)
+          cat > "$test_prd" <<'TESTPRD'
+<!-- ralph:initialized -->
+## TEST-001: Test task
+<!-- status: to-do -->
+<!-- labels: -->
+Test description
+TESTPRD
+          local awk_result
+          awk_result=$(awk -v query="$query" -f "$RALPH_HOME/lib/providers/file-query.awk" "$test_prd" 2>&1)
+          local awk_exit=$?
+          rm -f "$test_prd"
+          if [ "$awk_exit" -ne 0 ]; then
+            echo "    $agent: FAIL — file-query.awk error: $awk_result"
+            exit_code=1
+            continue
+          fi
+          echo "    $agent: OK — $query"
+          ;;
+        *)
+          echo "    $agent: OK — $query (no structural validation for provider '$provider')"
+          ;;
+      esac
+    done
+    echo ""
+  done
+
+  # ─── 6c: Round-trip verification for Jira ──────────────────────────────
+  # Compare generated JQL with old hardcoded JQL from git history.
+  # This is a migration safety net.
+
+  local jira_routing="$RALPH_HOME/providers/jira/routing.json"
+  if [ -f "$jira_routing" ]; then
+    local old_jira_json
+    old_jira_json=$(git -C "$RALPH_HOME" show HEAD:providers/jira/routing.json 2>/dev/null || true)
+
+    if [ -n "$old_jira_json" ]; then
+      local has_old_jql
+      has_old_jql=$(echo "$old_jira_json" | jq -r '.agents | to_entries[0].value | has("jql")' 2>/dev/null || echo "false")
+
+      if [ "$has_old_jql" = "true" ]; then
+        echo "  Round-trip: comparing generated JQL with old hardcoded JQL..."
+        echo ""
+
+        for agent in $(jq -r '.agents | keys[]' "$jira_routing"); do
+          local old_jql generated_jql norm_old norm_gen
+          old_jql=$(echo "$old_jira_json" | jq -r ".agents.${agent}.jql // empty")
+          if [ -z "$old_jql" ]; then
+            echo "    $agent: SKIP — no old JQL in git history"
+            continue
+          fi
+
+          generated_jql=$(zsh -c "
+            RALPH_HOME='$RALPH_HOME'
+            source '$RALPH_HOME/lib/ralph-core.sh'
+            ralph_init
+            RALPH_PROVIDER=jira
+            source '$RALPH_HOME/lib/providers/jira.sh'
+            provider_rules_to_query '$agent'
+          " 2>/dev/null)
+
+          # Normalize for comparison: unify quotes, collapse whitespace, lowercase AND/OR
+          normalize_jql() {
+            echo "$1" | sed "s/'/\"/g" | sed 's/  */ /g' | sed 's/^ //;s/ $//'
+          }
+
+          norm_old=$(normalize_jql "$old_jql")
+          norm_gen=$(normalize_jql "$generated_jql")
+
+          if [ "$norm_old" = "$norm_gen" ]; then
+            echo "    $agent: MATCH"
+          else
+            echo "    $agent: DIFFERS (expected — clause ordering/quoting may change)"
+            echo "      old: $norm_old"
+            echo "      new: $norm_gen"
+            # Not a failure — structural differences are expected when generating
+            # from rules (e.g. status in (...) vs status = '...', clause ordering)
+          fi
+        done
+        echo ""
+      fi
+    fi
+  fi
+
+  # ─── 6b: Live verification ─────────────────────────────────────────────
+  if [ "${LIVE_CHECK:-false}" = "true" ]; then
+    echo "  Live verification: executing generated queries against real APIs..."
+    echo ""
+
+    for provider in "${providers[@]}"; do
+      local provider_script="$RALPH_HOME/lib/providers/${provider}.sh"
+      local routing="$RALPH_HOME/providers/$provider/routing.json"
+
+      # Check if provider credentials are available
+      local can_run=true
+      case "$provider" in
+        jira)
+          [ -z "${JIRA_EMAIL:-}" ] || [ -z "${JIRA_API_TOKEN:-}" ] || [ -z "${JIRA_BASE_URL:-}" ] && can_run=false
+          ;;
+        linear)
+          [ -z "${LINEAR_API_KEY:-}" ] || [ -z "${LINEAR_TEAM_KEY:-}" ] && can_run=false
+          ;;
+        file)
+          [ -z "${RALPH_PRD_FILE:-}" ] && can_run=false
+          [ -n "${RALPH_PRD_FILE:-}" ] && [ ! -f "${RALPH_PRD_FILE:-}" ] && can_run=false
+          ;;
+      esac
+
+      if [ "$can_run" = "false" ]; then
+        echo "    $provider: SKIP — credentials not available"
+        continue
+      fi
+
+      echo "    Provider: $provider"
+
+      for agent in $(jq -r '.agents | keys[]' "$routing"); do
+        local query result
+        query=$(zsh -c "
+          RALPH_HOME='$RALPH_HOME'
+          source '$RALPH_HOME/lib/ralph-core.sh'
+          ralph_init
+          RALPH_PROVIDER='$provider'
+          source '$provider_script'
+          provider_rules_to_query '$agent'
+        " 2>/dev/null)
+
+        # Execute the query via provider_check_tasks
+        # Pass query via env var to avoid shell escaping issues (JQL contains quotes)
+        result=$(RALPH_LIVE_QUERY="$query" zsh -c '
+          RALPH_HOME="'"$RALPH_HOME"'"
+          source "$RALPH_HOME/lib/ralph-core.sh"
+          ralph_init
+          RALPH_PROVIDER="'"$provider"'"
+          source "'"$provider_script"'"
+          provider_check_tasks "$RALPH_LIVE_QUERY"
+        ' 2>&1)
+        local live_exit=$?
+
+        # Check if the result is a number (API accepted the query)
+        if [ "$live_exit" -ne 0 ]; then
+          echo "      $agent: FAIL — provider_check_tasks exited with $live_exit"
+          echo "        output: $result"
+          exit_code=1
+        elif echo "$result" | grep -qE '^[0-9]+$'; then
+          echo "      $agent: OK — API accepted query ($result tasks found)"
+        else
+          echo "      $agent: FAIL — API rejected query"
+          echo "        output: $result"
+          exit_code=1
+        fi
+      done
+      echo ""
+    done
+  fi
+
+  if [ "$exit_code" -eq 0 ]; then
+    echo "PASS: All generated queries are structurally valid."
+  else
+    echo "FAIL: Some generated queries have structural issues."
   fi
 
   return $exit_code
@@ -641,6 +886,13 @@ case "${1:-}" in
   --check-core)
     check_core
     ;;
+  --check-queries)
+    if [ "${2:-}" = "--live" ]; then
+      LIVE_CHECK=true check_queries
+    else
+      check_queries
+    fi
+    ;;
   --check-all)
     all_exit=0
     echo "=========================================="
@@ -651,7 +903,7 @@ case "${1:-}" in
     echo ""
     run_simulation false || all_exit=1
     echo ""
-    echo "--- JQL Drift ---"
+    echo "--- Prompt Hardcoded Queries ---"
     echo ""
     check_prompts || all_exit=1
     echo ""
@@ -663,6 +915,10 @@ case "${1:-}" in
     echo ""
     check_core || all_exit=1
     echo ""
+    echo "--- Generated Queries ---"
+    echo ""
+    check_queries || all_exit=1
+    echo ""
     echo "=========================================="
     if [ "$all_exit" -eq 0 ]; then
       echo "  ALL CHECKS PASSED"
@@ -673,14 +929,16 @@ case "${1:-}" in
     exit $all_exit
     ;;
   --help|-h)
-    echo "Usage: validate-routing [--matrix | --check-prompts | --check-loops | --check-core | --check-all]"
+    echo "Usage: validate-routing [--matrix | --check-prompts | --check-loops | --check-core | --check-queries | --check-all]"
     echo ""
-    echo "  (default)        Simulate ticket states, report overlaps and gaps"
-    echo "  --matrix         Full matrix output showing all agents vs all states"
-    echo "  --check-prompts  Check JQL drift between routing.json and prompt files"
-    echo "  --check-loops    Check for self-loop risks and global-exclude violations"
-    echo "  --check-core     Check core behaviors (CLI routing, jq filters, promises, etc.)"
-    echo "  --check-all      Run all checks (simulation + prompts + loops + core)"
+    echo "  (default)          Simulate ticket states, report overlaps and gaps"
+    echo "  --matrix           Full matrix output showing all agents vs all states"
+    echo "  --check-prompts    Verify prompts don't contain hardcoded queries"
+    echo "  --check-loops      Check for self-loop risks and global-exclude violations"
+    echo "  --check-core       Check core behaviors (CLI routing, jq filters, promises, etc.)"
+    echo "  --check-queries    Verify generated queries from rules are structurally valid"
+    echo "  --check-queries --live  Also execute queries against real APIs (requires credentials)"
+    echo "  --check-all        Run all checks"
     exit 0
     ;;
   "")
@@ -688,7 +946,7 @@ case "${1:-}" in
     ;;
   *)
     echo "Unknown option: $1"
-    echo "Usage: validate-routing [--matrix | --check-prompts | --check-loops | --check-core | --check-all]"
+    echo "Usage: validate-routing [--matrix | --check-prompts | --check-loops | --check-core | --check-queries | --check-all]"
     exit 1
     ;;
 esac

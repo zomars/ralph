@@ -19,31 +19,30 @@
   "global_label_excludes": ["needs-input"],
   "agents": {
     "planner": {
-      "query": "(file:needs-init OR (status:to-do,in-progress (description:empty OR label:needs-planning) !label:needs-input,needs-tests,tech-debt,ralph-blocked,ralph-failed,documented))",
       "adds_labels": ["needs-input", "needs-tests"],
       "rules": {
         "status_in": ["to-do", "in-progress"],
         "labels_include": null,
         "labels_exclude": ["needs-input", "needs-tests", "tech-debt", "ralph-blocked", "ralph-failed", "documented"],
-        "description_condition": "empty_or_todo_or_label_needs_planning"
+        "description_condition": "empty_or_todo_or_label_needs_planning",
+        "init_condition": "file_needs_init"
       },
       "script": "bin/afk-planner",
       "prompt": "prompts/planner.md"
     },
     "implementer": {
-      "query": "status:to-do,in-progress !description:empty !label:needs-tests,tech-debt,ralph-blocked,needs-planning,needs-input !blocked",
       "adds_labels": ["ralph-blocked"],
       "rules": {
         "status_in": ["to-do", "in-progress"],
         "labels_include": null,
         "labels_exclude": ["needs-tests", "tech-debt", "ralph-blocked", "needs-planning", "needs-input"],
-        "description_condition": "not_empty_and_not_todo"
+        "description_condition": "not_empty_and_not_todo",
+        "exclude_blocked": true
       },
       "script": "bin/afk-implementer",
       "prompt": "prompts/implementer.md"
     },
     "reviewer": {
-      "query": "status:in-review !label:needs-planning,needs-tests,tech-debt,needs-input",
       "adds_labels": ["ralph-failed", "needs-tests", "tech-debt"],
       "rules": {
         "status_in": ["in-review"],
@@ -55,7 +54,6 @@
       "prompt": "prompts/reviewer.md"
     },
     "tester": {
-      "query": "label:needs-tests !label:needs-planning,needs-input !status:done",
       "adds_labels": ["tech-debt"],
       "rules": {
         "status_in": ["to-do", "in-progress", "in-review"],
@@ -67,7 +65,6 @@
       "prompt": "prompts/tester.md"
     },
     "refactor": {
-      "query": "label:tech-debt !label:needs-planning,needs-input,needs-tests",
       "adds_labels": [],
       "rules": {
         "status_in": ["to-do", "in-progress", "in-review", "done"],
@@ -79,7 +76,6 @@
       "prompt": "prompts/refactor.md"
     },
     "documenter": {
-      "query": "status:done !label:documented,tech-debt,needs-input",
       "adds_labels": ["documented"],
       "rules": {
         "status_in": ["done"],

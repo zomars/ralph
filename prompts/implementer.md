@@ -11,8 +11,7 @@
 
 ## 1. Load Context
 
-1. Find assigned tasks using the backlog search tool with query:
-   `assignee = currentUser() AND status in ("To Do", "In Progress") AND (description is not EMPTY AND description !~ "TODO") AND (labels is EMPTY OR labels not in ("needs-tests", "tech-debt", "ralph-blocked", "needs-planning", "needs-input")) AND issueKey not in linkedIssuesOf("status in ('To Do', 'In Progress')", "is blocked by") ORDER BY priority DESC`
+1. Find assigned tasks using the backlog search tool with the query provided in the initial message.
    **IMPORTANT**: Set `maxResults` to your instance number (from the user message, e.g. "instance 2" → `maxResults=2`). Default to `maxResults=1` if no instance number is given.
 2. Read last 10 RALPH commits.
 
