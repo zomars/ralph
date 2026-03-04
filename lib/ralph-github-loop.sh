@@ -72,6 +72,7 @@ ralph_fetch_fixer_prs() {
             title
             url
             headRefName
+            isDraft
             mergeable
             reviewThreads(first: 100) {
               nodes { isResolved }
@@ -80,13 +81,14 @@ ralph_fetch_fixer_prs() {
         }
       }
     }" --jq '[.data.search.nodes[] |
+      select(.isDraft == false) |
       { hasUnresolvedThreads: (.reviewThreads.nodes | map(select(.isResolved == false)) | length > 0),
         hasConflicts: (.mergeable == "CONFLICTING") } as $flags |
       select($flags.hasUnresolvedThreads or $flags.hasConflicts) |
       {number, title, url, headRefName, hasConflicts: $flags.hasConflicts}
     ]' 2>/dev/null) || graphql_prs="[]"
 
-  cr_prs=$(gh pr list --author "@me" --search "review:changes_requested" \
+  cr_prs=$(gh pr list --author "@me" --search "review:changes_requested draft:false" \
     --json number,title,url,headRefName 2>/dev/null) || cr_prs="[]"
 
   # Merge and deduplicate by PR number, preferring graphql_prs entries (which carry hasConflicts)

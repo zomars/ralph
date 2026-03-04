@@ -120,6 +120,11 @@ Work through ALL unresolved feedback before moving to the next step.
    git push origin <headRefName>
    ```
 
+4. **Undraft PR** — mark it ready for review since fixes are pushed:
+   ```bash
+   gh pr ready <headRefName>
+   ```
+
 ## 5. Reply & Resolve
 
 For each piece of feedback you addressed in Step 3:

@@ -136,6 +136,11 @@ Evidence: <brief summary — PASS/FAIL, what was tested>
 git push origin "ralph/<TASK-KEY>"
 ```
 
+**Undraft PR** — mark it ready for review since testing is complete:
+```bash
+gh pr ready "ralph/<TASK-KEY>"
+```
+
 ### Release the branch
 
 **CRITICAL**: Before stopping, switch back to your workspace branch:

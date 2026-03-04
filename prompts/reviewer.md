@@ -58,12 +58,20 @@ Based on your analysis, choose ONE path:
 ### Path A: REJECT (Logic/Tests Failed)
 
 - **Action**: Comment on the task explaining _exactly_ what failed.
+- **Re-draft PR**:
+  ```bash
+  gh pr ready --undo "ralph/<TASK-KEY>"
+  ```
 - **Transition**: Move status back to **"In Progress"**.
 - **Label**: (Optional) Add `ralph-failed` if it was a build error.
 
 ### Path B: NEEDS TESTING (No Evidence of Browser Testing)
 
 - **Action**: Comment explaining what's missing (e.g. "Code looks good but needs browser testing with evidence" or "Test report lacks screenshots").
+- **Re-draft PR**:
+  ```bash
+  gh pr ready --undo "ralph/<TASK-KEY>"
+  ```
 - **Label**: Add `needs-tests`.
 - **Transition**: Move status to **"To Do"**. (This hands off to the Tester Agent).
 
@@ -71,9 +79,8 @@ Based on your analysis, choose ONE path:
 
 - **Action**: Comment "Functional, but needs refactoring."
 - **Label**: Add `tech-debt` label to the Jira issue.
-- **Mark ready + label for merge**:
+- **Label for merge**:
   ```bash
-  gh pr ready "ralph/<TASK-KEY>"
   gh label create ready-to-merge --description "Reviewer-approved, safe to merge" --color 0E8A16 --force
   gh pr edit "ralph/<TASK-KEY>" --add-label "ready-to-merge"
   ```
@@ -84,9 +91,8 @@ Based on your analysis, choose ONE path:
 
 - **Precondition**: Tests pass, code is clean, AND a test report with screenshots exists in comments.
 - **Action**: Comment "Verified. Tests passed. Browser testing evidence confirmed. Code looks good."
-- **Mark ready + label for merge**:
+- **Label for merge**:
   ```bash
-  gh pr ready "ralph/<TASK-KEY>"
   gh label create ready-to-merge --description "Reviewer-approved, safe to merge" --color 0E8A16 --force
   gh pr edit "ralph/<TASK-KEY>" --add-label "ready-to-merge"
   ```

@@ -1,5 +1,12 @@
 {
   "statuses": ["to-do", "in-progress", "in-review", "done"],
+  "pr_draft_convention": {
+    "description": "PRs are created as draft and undrafted only when ready for review. Draft status signals work-in-progress.",
+    "created_as": "draft",
+    "undraft_on": ["implementer→In Review", "tester→In Review", "fixer→push"],
+    "redraft_on": ["reviewer→reject (Path A)", "reviewer→needs-testing (Path B)"],
+    "skip_draft_in": ["fixer PR fetch", "merger PR fetch"]
+  },
   "labels": [
     "needs-planning",
     "needs-tests",

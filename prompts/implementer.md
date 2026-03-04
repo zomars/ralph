@@ -141,6 +141,13 @@ if ! gh pr list --head "ralph/<TASK-KEY>" --json number --jq '.[0].number' 2>/de
 fi
 ```
 
+**If transitioning to "In Review"** (verified with evidence), undraft the PR:
+```bash
+gh pr ready "ralph/<TASK-KEY>"
+```
+
+Do NOT undraft if keeping status at "In Progress" (partial progress).
+
 ### Release the branch
 
 **CRITICAL**: Before stopping, switch back to your workspace branch so other agents can checkout the task branch:
