@@ -225,6 +225,17 @@ check_prompts() {
   echo "Checking JQL drift between routing.json and prompt files..."
   echo ""
 
+  # Prompt drift check only applies to Jira provider (prompts embed JQL).
+  # Non-Jira providers use a different query syntax not embedded in prompts.
+  local has_jql
+  has_jql=$(jq -r '.agents | to_entries[0].value | has("jql")' "$ROUTING_JSON")
+  if [ "$has_jql" != "true" ]; then
+    echo "  Skipping — provider uses 'query' format (prompts embed JQL only)."
+    echo ""
+    echo "PASS: Prompt drift check not applicable for this provider."
+    return 0
+  fi
+
   local agent
   for agent in $(get_agents); do
     local json_jql
