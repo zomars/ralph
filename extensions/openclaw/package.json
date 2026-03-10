@@ -1,0 +1,16 @@
+{
+  "name": "ralph",
+  "version": "0.1.0",
+  "description": "Monitor and control Ralph agents from Telegram via OpenClaw",
+  "type": "module",
+  "main": "index.ts",
+  "openclaw": {
+    "extensions": ["./index.ts"]
+  },
+  "dependencies": {
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.4.0"
+  }
+}

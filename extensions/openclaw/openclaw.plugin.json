@@ -1,0 +1,27 @@
+{
+  "id": "ralph",
+  "name": "Ralph Agent Bridge",
+  "version": "0.1.0",
+  "description": "Monitor and control Ralph agents from Telegram",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "enabled": { "type": "boolean" },
+      "projectDir": { "type": "string" },
+      "chatId": { "type": "string" },
+      "threadId": { "type": "number" },
+      "accountId": { "type": "string" },
+      "agents": { "type": "array", "items": { "type": "string" } },
+      "notifications": {
+        "type": "object",
+        "properties": {
+          "onComplete": { "type": "boolean" },
+          "onAbort": { "type": "boolean" },
+          "onStart": { "type": "boolean" },
+          "onStop": { "type": "boolean" }
+        }
+      },
+      "pollIntervalMs": { "type": "number" }
+    }
+  }
+}
