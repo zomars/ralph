@@ -149,7 +149,17 @@ ralph_setup_worktree() {
     # Delete stale branch if it exists but worktree is gone
     git branch -D "$branch_name" >/dev/null 2>&1 || true
     if git show-ref --verify --quiet "refs/heads/$branch_name"; then
-      # Branch couldn't be deleted (e.g. checked out in main repo) — reuse it
+      # Branch still exists — likely checked out in main repo. Switch main repo away.
+      local main_branch
+      main_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||') || main_branch="main"
+      if [[ "$(git symbolic-ref --short HEAD 2>/dev/null)" == "$branch_name" ]]; then
+        ralph_log "Main repo on workspace branch $branch_name — switching to $main_branch"
+        git checkout "$main_branch" --quiet 2>/dev/null || true
+        git branch -D "$branch_name" >/dev/null 2>&1 || true
+      fi
+    fi
+    if git show-ref --verify --quiet "refs/heads/$branch_name"; then
+      # Branch persists (checked out elsewhere) — reuse it
       git worktree add "$RALPH_WORKTREE_DIR" "$branch_name" --quiet
     else
       git worktree add "$RALPH_WORKTREE_DIR" -b "$branch_name" HEAD --quiet
