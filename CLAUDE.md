@@ -25,7 +25,7 @@ ralph config                    # Show current config
 
 ### Two Loop Types
 
-1. **Backlog-gated** (`lib/ralph-gated-loop.sh`) — polls a provider (Jira/file) for matching tasks. Used by: planner, implementer, reviewer, tester, refactor, documenter.
+1. **Backlog-gated** (`lib/ralph-gated-loop.sh`) — polls a provider (Jira/Linear/GitHub Issues/GitHub Projects/file) for matching tasks. Used by: planner, implementer, reviewer, tester, refactor, documenter.
 2. **GitHub-gated** (`lib/ralph-github-loop.sh`) — polls for open PRs with unresolved review threads. Used by: fixer.
 
 Both loops: check for work → invoke `claude` with agent prompt + provider instructions → parse stream-json output → check for `<promise>COMPLETE</promise>` or `<promise>ABORT</promise>` → cooldown → repeat.

@@ -283,7 +283,7 @@ ralph_get_query() {
 ralph_extract_task_key() {
   local file="$1"
   [[ ! -f "$file" ]] && return
-  jq -r '.text // empty' "$file" 2>/dev/null | grep -oE '[A-Z][A-Z0-9]+-[0-9]+' | head -1
+  jq -r '.text // empty' "$file" 2>/dev/null | grep -oE '[A-Z][A-Z0-9]+-[0-9]+|#[0-9]+' | head -1
 }
 
 # ralph_save_session_log <session_log> <agent_key> <instance_num> [task_key]

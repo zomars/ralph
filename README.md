@@ -41,6 +41,31 @@ export JIRA_BASE_URL="https://yourorg.atlassian.net"
 export RALPH_POLL_INTERVAL=5
 ```
 
+**Linear Provider:**
+```zsh
+export RALPH_PROVIDER="linear"
+export LINEAR_API_KEY="lin_api_..."
+export LINEAR_TEAM_KEY="ENG"
+export RALPH_POLL_INTERVAL=5
+```
+
+**GitHub Issues Provider:**
+```zsh
+export RALPH_PROVIDER="github-issues"
+export GITHUB_REPO="owner/repo"
+export RALPH_POLL_INTERVAL=5
+# gh CLI handles auth via GITHUB_TOKEN or `gh auth login`
+```
+
+**GitHub Projects Provider:**
+```zsh
+export RALPH_PROVIDER="github-projects"
+export GITHUB_REPO="owner/repo"
+export GITHUB_PROJECT_NUMBER=1
+export RALPH_POLL_INTERVAL=5
+# gh CLI handles auth via GITHUB_TOKEN or `gh auth login`
+```
+
 **File Provider:**
 ```zsh
 export RALPH_PROVIDER="file"
@@ -89,7 +114,7 @@ Utility commands:
 
 Each agent runs an infinite poll loop: check for work, invoke Claude, parse output, cooldown, repeat.
 
-**Backlog-gated agents** poll a provider (Jira/file) for matching tasks:
+**Backlog-gated agents** poll a provider (Jira/Linear/GitHub Issues/GitHub Projects/file) for matching tasks:
 
 | Command              | Role          | Trigger                                                  |
 | :------------------- | :------------ | :------------------------------------------------------- |
@@ -147,6 +172,9 @@ Ralph abstracts the backlog system. Set `RALPH_PROVIDER` to switch providers.
 ### Supported Providers
 
 - **jira** (default) — Jira Cloud via a bundled MCP server (`ralph-jira-mcp`)
+- **linear** — Linear via a bundled MCP server (`ralph-linear-mcp`)
+- **github-issues** — GitHub Issues with label-based statuses (`status:to-do`, etc.) via `gh` CLI
+- **github-projects** — GitHub Projects v2 with board column statuses via `gh` CLI + GraphQL
 - **file** — Local markdown file (prd.md)
 
 ### Provider Architecture
@@ -191,13 +219,26 @@ Description content here...
 
 **Example:** See `examples/prd.md` for a complete template.
 
+### GitHub Issues Provider
+
+Uses issue labels as statuses (`status:to-do`, `status:in-progress`, `status:in-review`, `status:done`). Agents interact via `gh` CLI — no MCP server needed.
+
+Status changes are label swaps:
+```bash
+gh issue edit 123 --repo owner/repo --remove-label "status:to-do" --add-label "status:in-progress"
+```
+
+### GitHub Projects Provider
+
+Uses GitHub Projects v2 board columns for statuses (`Todo`, `In Progress`, `In Review`, `Done`). Labels are still managed on the underlying issues. Agents use `gh api graphql` for status mutations and `gh issue edit` for labels/comments.
+
+Requires `GITHUB_PROJECT_NUMBER` in addition to `GITHUB_REPO`.
+
 ### Adding a New Provider
 
-To add support for GitHub Issues, Linear, etc.:
-
-1. **`lib/providers/github.sh`** — Implement `PROVIDER_ENV_VARS` and `provider_check_tasks()`
-2. **`providers/github/instructions.md`** — Map generic workflow concepts to provider-specific MCP tools
-3. **`providers/github/routing.json`** — Provider-specific queries per agent
+1. **`lib/providers/<name>.sh`** — Implement `PROVIDER_ENV_VARS` and `provider_check_tasks()`
+2. **`providers/<name>/instructions.md`** — Map generic workflow concepts to provider-specific tools
+3. **`providers/<name>/routing.json`** — Provider-specific queries per agent
 
 No changes to core lib, bin wrappers, or base prompts needed.
 
@@ -302,6 +343,9 @@ ralph/
 │   ├── ralph-github-loop.sh     # GitHub-gated poll loop (fixer, merger)
 │   └── providers/
 │       ├── jira.sh              # Jira provider implementation
+│       ├── linear.sh            # Linear provider implementation
+│       ├── github-issues.sh     # GitHub Issues provider (label-based statuses)
+│       ├── github-projects.sh   # GitHub Projects v2 provider (board columns)
 │       ├── file.sh              # File provider implementation
 │       └── file-query.awk       # File query parser
 ├── prompts/                     # Provider-agnostic workflow prompts
@@ -318,6 +362,15 @@ ralph/
 │   │   ├── instructions.md      # Jira MCP tool mappings
 │   │   ├── routing.json         # Jira queries + validation rules
 │   │   └── mcp-server.mjs       # Bundled Jira MCP server
+│   ├── linear/
+│   │   ├── instructions.md      # Linear MCP tool mappings
+│   │   └── routing.json         # Linear queries + validation rules
+│   ├── github-issues/
+│   │   ├── instructions.md      # GitHub Issues gh CLI instructions
+│   │   └── routing.json         # GitHub Issues queries + validation rules
+│   ├── github-projects/
+│   │   ├── instructions.md      # GitHub Projects v2 GraphQL instructions
+│   │   └── routing.json         # GitHub Projects queries + validation rules
 │   └── file/
 │       ├── instructions.md      # File provider instructions
 │       └── routing.json         # File queries + validation rules

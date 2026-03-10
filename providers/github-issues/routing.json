@@ -1,0 +1,90 @@
+{
+  "statuses": ["to-do", "in-progress", "in-review", "done"],
+  "pr_draft_convention": {
+    "description": "PRs are created as draft and undrafted only when ready for review. Draft status signals work-in-progress.",
+    "created_as": "draft",
+    "undraft_on": ["implementer->in-review", "tester->in-review", "fixer->push"],
+    "redraft_on": ["reviewer->reject (Path A)", "reviewer->needs-testing (Path B)"],
+    "skip_draft_in": ["fixer PR fetch", "merger PR fetch"]
+  },
+  "labels": [
+    "needs-planning",
+    "needs-tests",
+    "tech-debt",
+    "ralph-blocked",
+    "ralph-failed",
+    "needs-input",
+    "documented",
+    "ready-to-merge"
+  ],
+  "global_label_excludes": ["needs-input"],
+  "agents": {
+    "planner": {
+      "adds_labels": ["needs-input", "needs-tests"],
+      "rules": {
+        "status_in": ["to-do", "in-progress"],
+        "labels_include": null,
+        "labels_exclude": ["needs-input", "needs-tests", "tech-debt", "ralph-blocked", "ralph-failed", "documented"],
+        "description_condition": "empty_or_todo_or_label_needs_planning"
+      },
+      "script": "bin/afk-planner",
+      "prompt": "prompts/planner.md"
+    },
+    "implementer": {
+      "adds_labels": ["ralph-blocked"],
+      "rules": {
+        "status_in": ["to-do", "in-progress"],
+        "labels_include": null,
+        "labels_exclude": ["needs-tests", "tech-debt", "ralph-blocked", "needs-planning", "needs-input"],
+        "description_condition": "not_empty_and_not_todo",
+        "exclude_blocked": true
+      },
+      "script": "bin/afk-implementer",
+      "prompt": "prompts/implementer.md"
+    },
+    "reviewer": {
+      "adds_labels": ["ralph-failed", "needs-tests", "tech-debt", "ready-to-merge"],
+      "rules": {
+        "status_in": ["in-review"],
+        "labels_include": null,
+        "labels_exclude": ["needs-planning", "needs-tests", "tech-debt", "needs-input", "ready-to-merge"],
+        "description_condition": null
+      },
+      "script": "bin/afk-reviewer",
+      "prompt": "prompts/reviewer.md"
+    },
+    "tester": {
+      "adds_labels": ["tech-debt"],
+      "rules": {
+        "status_in": ["to-do", "in-progress", "in-review"],
+        "labels_include": ["needs-tests"],
+        "labels_exclude": ["needs-planning", "needs-input"],
+        "description_condition": null
+      },
+      "script": "bin/afk-tester",
+      "prompt": "prompts/tester.md"
+    },
+    "refactor": {
+      "adds_labels": [],
+      "rules": {
+        "status_in": ["to-do", "in-progress", "in-review", "done"],
+        "labels_include": ["tech-debt"],
+        "labels_exclude": ["needs-planning", "needs-input", "needs-tests"],
+        "description_condition": null
+      },
+      "script": "bin/afk-refactor",
+      "prompt": "prompts/refactor.md"
+    },
+    "documenter": {
+      "adds_labels": ["documented"],
+      "rules": {
+        "status_in": ["done"],
+        "labels_include": null,
+        "labels_exclude": ["documented", "tech-debt", "needs-input"],
+        "description_condition": null
+      },
+      "script": "bin/afk-documenter",
+      "prompt": "prompts/documenter.md"
+    }
+  }
+}

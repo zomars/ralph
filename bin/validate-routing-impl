@@ -230,6 +230,7 @@ check_prompts() {
   local hardcoded_patterns=(
     'assignee = currentUser()'
     'assignee:me'
+    'assignee:@me'
     'status:to-do'
     'state:Todo'
   )
@@ -375,6 +376,29 @@ check_queries() {
           fi
           echo "    $agent: OK — $query"
           ;;
+        github-issues|github-projects)
+          # Verify DSL contains assignee:@me and valid tokens
+          if ! echo "$query" | grep -q 'assignee:@me'; then
+            echo "    $agent: FAIL — missing 'assignee:@me'"
+            exit_code=1
+            continue
+          fi
+          # Verify only valid DSL tokens are present
+          local bad_token=""
+          local tok
+          for tok in $query; do
+            case "$tok" in
+              assignee:@me|status:*|!status:*|label:*|!label:*|description:empty|!description:empty|!blocked) ;;
+              *) bad_token="$tok" ;;
+            esac
+          done
+          if [ -n "$bad_token" ]; then
+            echo "    $agent: FAIL — unknown DSL token: $bad_token"
+            exit_code=1
+            continue
+          fi
+          echo "    $agent: OK — $query"
+          ;;
         file)
           # Run through file-query.awk with a synthetic test file
           local test_prd
@@ -479,6 +503,14 @@ TESTPRD
           ;;
         linear)
           [ -z "${LINEAR_API_KEY:-}" ] || [ -z "${LINEAR_TEAM_KEY:-}" ] && can_run=false
+          ;;
+        github-issues)
+          [ -z "${GITHUB_REPO:-}" ] && can_run=false
+          command -v gh &>/dev/null || can_run=false
+          ;;
+        github-projects)
+          [ -z "${GITHUB_REPO:-}" ] || [ -z "${GITHUB_PROJECT_NUMBER:-}" ] && can_run=false
+          command -v gh &>/dev/null || can_run=false
           ;;
         file)
           [ -z "${RALPH_PRD_FILE:-}" ] && can_run=false
