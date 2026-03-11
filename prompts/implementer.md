@@ -78,14 +78,32 @@ All work for this task happens on the `ralph/<TASK-KEY>` branch.
 1. Get available transitions for the task
 2. Transition to "In Progress"
 
-**Then implement the task. Follow these steps:**
+**Then implement the task using Test-Driven Development (red-green-refactor):**
 
 1. **Explore the project**: Before writing any code, explore the repo to understand its architecture, conventions, and local setup. Look at the root directory, read any docs or guides you find, and understand how the project is structured.
 2. **Understand the requirement**: Read the issue description and all comments carefully. Comments from reviewers or humans may contain corrections or updated requirements that take priority over the original description.
 3. **Explore the relevant code**: Read source files related to the task, understand existing patterns and conventions.
-4. **Plan your changes**: Identify which files need to be created or modified. Keep changes minimal and focused.
-5. **Write the code**: Implement the feature, fix, or change described in the issue. Follow existing code style and patterns.
-6. **Verify with evidence**: Confirm your implementation works using the appropriate method:
+4. **Plan your changes**: Identify which files need to be created or modified. Keep changes minimal and focused. List the **behaviors** to implement (not implementation steps). Identify opportunities for deep modules (small interface, deep implementation). Design interfaces for testability.
+5. **Implement with TDD — vertical slices, one behavior at a time:**
+
+   **DO NOT write all tests first, then all code.** That produces weak tests coupled to imagined behavior.
+
+   For each behavior:
+   ```
+   RED:   Write ONE test for the next behavior → test FAILS
+   GREEN: Write MINIMAL code to make it pass → test PASSES
+   REFACTOR: Clean up duplication, deepen modules → tests still PASS
+   ```
+
+   Rules:
+   - One test at a time — don't anticipate future tests
+   - Only enough code to pass the current test
+   - Tests verify behavior through public interfaces, not implementation details
+   - Tests should survive internal refactors — if you rename a private function and a test breaks, it was testing implementation
+   - Never refactor while RED — get to GREEN first
+   - Mock only at boundaries (external APIs, databases, time/randomness)
+
+6. **Verify with evidence**: After all TDD cycles, confirm your implementation works end-to-end:
 
 | Task Type         | Verification Method                      |
 | ----------------- | ---------------------------------------- |
@@ -99,7 +117,7 @@ All work for this task happens on the `ralph/<TASK-KEY>` branch.
 
 Run the dev server if needed: `npm run dev --workspace=@frendor/consolidated-app`
 
-7. **Run tests**: Run `npm run test` before committing. If blocked by a genuine blocker (build failures, missing dependencies, failing tests), output `<promise>ABORT</promise>`.
+7. **Run full test suite**: Run `npm run test` before committing. If blocked by a genuine blocker (build failures, missing dependencies, failing tests), output `<promise>ABORT</promise>`.
 
 **Ralph only works on existing issues assigned to the user.** It does NOT create new issues or subtasks.
 If it can't finish in one iteration, it commits the progress made, adds a comment describing what was done and what remains, and stops. The next iteration continues where it left off.
