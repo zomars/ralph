@@ -58,11 +58,10 @@ ralph_fetch_fixer_prs() {
     return
   fi
 
-  # Single GraphQL query fetches everything the fixer needs.
-  # Selects PRs with unresolved review threads OR merge conflicts.
-  # We also merge in PRs with formal "changes requested" via gh pr list
-  # (those may not have unresolved threads yet).
-  local graphql_prs cr_prs
+  # Single GraphQL query: selects PRs with unresolved threads, merge conflicts,
+  # or CHANGES_REQUESTED reviews newer than the latest commit (stale reviews are
+  # skipped — GitHub never clears CHANGES_REQUESTED when threads are resolved).
+  local graphql_prs
   graphql_prs=$(gh api graphql -f query="
     {
       search(query: \"is:pr is:open author:@me repo:$repo\", type: ISSUE, first: 50) {
@@ -77,23 +76,29 @@ ralph_fetch_fixer_prs() {
             reviewThreads(first: 100) {
               nodes { isResolved }
             }
+            latestReviews(first: 10) {
+              nodes { state submittedAt }
+            }
+            commits(last: 1) {
+              nodes { commit { committedDate } }
+            }
           }
         }
       }
     }" --jq '[.data.search.nodes[] |
       select(.isDraft == false) |
       { hasUnresolvedThreads: (.reviewThreads.nodes | map(select(.isResolved == false)) | length > 0),
-        hasConflicts: (.mergeable == "CONFLICTING") } as $flags |
-      select($flags.hasUnresolvedThreads or $flags.hasConflicts) |
+        hasConflicts: (.mergeable == "CONFLICTING"),
+        hasChangesRequested: (
+          (.commits.nodes[0].commit.committedDate // "1970-01-01T00:00:00Z") as $lastCommit |
+          [.latestReviews.nodes[] | select(.state == "CHANGES_REQUESTED" and .submittedAt > $lastCommit)] | length > 0
+        )
+      } as $flags |
+      select($flags.hasUnresolvedThreads or $flags.hasConflicts or $flags.hasChangesRequested) |
       {number, title, url, headRefName, hasConflicts: $flags.hasConflicts}
     ]' 2>/dev/null) || graphql_prs="[]"
 
-  cr_prs=$(gh pr list --author "@me" --search "review:changes_requested draft:false" \
-    --json number,title,url,headRefName 2>/dev/null) || cr_prs="[]"
-
-  # Merge and deduplicate by PR number, preferring graphql_prs entries (which carry hasConflicts)
-  echo "$graphql_prs"$'\n'"$cr_prs" \
-    | jq -s 'add | group_by(.number) | map(first | .hasConflicts = (.hasConflicts // false)) | sort_by(.number)'
+  echo "$graphql_prs"
 }
 
 # Backward compat alias
