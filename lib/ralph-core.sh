@@ -142,7 +142,9 @@ ralph_setup_worktree() {
   RALPH_WORKTREE_DIR="/tmp/ralph-worktrees/${agent_key}-${instance_num}"
   RALPH_WORKTREE_CONTEXT=""
 
-  if [[ ! -d "$RALPH_WORKTREE_DIR" ]]; then
+  # Check for valid worktree (not just directory existence — stale dirs without .git happen)
+  if [[ ! -d "$RALPH_WORKTREE_DIR" ]] || ! git -C "$RALPH_WORKTREE_DIR" rev-parse --git-dir &>/dev/null; then
+    rm -rf "$RALPH_WORKTREE_DIR" 2>/dev/null || true
     local branch_name="ralph-workspace/${agent_key}-${instance_num}"
     # Remove stale worktree entry if git still tracks it
     git worktree prune 2>/dev/null || true
