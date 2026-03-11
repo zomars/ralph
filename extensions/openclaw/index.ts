@@ -149,7 +149,7 @@ export default {
             const prom = summary.promise ?? "in progress";
             const lines = summary.summaryLines.join("\n");
             return {
-              text: `<b>${target.toUpperCase()} #${inst}</b> — ${prom}\nTask: ${summary.taskKey ?? "?"} | Iteration: ${summary.iteration}\n${lines}`,
+              text: `**${target.toUpperCase()} #${inst}** — ${prom}\nTask: ${summary.taskKey ?? "?"} | Iteration: ${summary.iteration}\n${lines}`,
             };
           }
 

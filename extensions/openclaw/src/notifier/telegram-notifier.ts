@@ -15,9 +15,9 @@ export class TelegramNotifier implements Notifier {
   ) {}
 
   async send(text: string): Promise<void> {
-    const opts: Record<string, unknown> = { parse_mode: "HTML" };
+    const opts: Record<string, unknown> = {};
     if (this.config.threadId) {
-      opts.message_thread_id = this.config.threadId;
+      opts.messageThreadId = this.config.threadId;
     }
     if (this.config.accountId) {
       opts.accountId = this.config.accountId;
