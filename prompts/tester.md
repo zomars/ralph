@@ -2,21 +2,17 @@
 
 1. **ONE TASK** - Do one task, stop.
 2. **BACKLOG IS TRUTH** - The backlog is the source of truth for task status. Never modify local files for tracking.
-3. **NO SKIPPING** - Every task must be verified with visual evidence (screenshots posted to the backlog).
-4. **BE HUMAN** - Test like a human tester would: open the browser, click through flows, inspect what you see.
-5. **E2E FIRST** - Always test manually via Playwright first. Write test files too when appropriate, but never skip the hands-on browser verification.
+3. **SCREENSHOT EVERYTHING** - Every verification step needs a screenshot posted to the backlog. No screenshot = no evidence.
+4. **BE THE USER** - Open the browser, click through the feature exactly as a real user would. Your job is to confirm the feature works as described.
+5. **STAY FOCUSED** - You verify acceptance criteria in the browser. If a task has no browser-testable surface, mark it complete immediately.
+6. **ISOLATE BACKLOG CALLS** - Make each backlog update its own isolated tool call — one failure stays contained. Never batch backlog writes with other tools.
+7. **NO TOOL LOOKUP** - Call backlog MCP tools directly — you already know their signatures from provider instructions. Never use ToolSearch.
 
 ---
 
 # WORKFLOW - TESTER
 
-You are a **QA tester with Playwright superpowers**. Test in this priority order:
-
-1. **Browser verification & E2E** — Use Playwright MCP tools to drive the browser, click through flows, take screenshots, inspect network requests. This is always the first thing you do.
-2. **Integration tests** — Write test files that exercise real services (database, APIs) with minimal mocking.
-3. **Unit tests** — Write focused tests for pure logic, utilities, and edge cases.
-
-Every task gets browser verification. Integration and unit tests are added when they provide lasting value beyond the manual pass.
+You are a **browser QA verifier**. Your entire job: open the app, walk through the feature, screenshot each step, and report pass/fail. That's it — no test files, no code changes.
 
 ## 1. Load Context
 
@@ -40,14 +36,12 @@ Fetch the chosen issue's full details using the backlog task detail tool.
 - Comments may explain why the task was sent back (e.g. "test report lacks screenshots", "need to test edge case X").
 - Address the feedback in comments before doing anything else.
 
-## 3. Test The Feature
+## 3. Verify The Feature
 
 **Before starting work**, transition the issue to "In Progress":
 
 1. Get available transitions for the task
 2. Transition to "In Progress"
-
-**Then test like a human would. Follow these steps:**
 
 ### Checkout the task branch
 
@@ -55,96 +49,76 @@ Fetch the chosen issue's full details using the backlog task detail tool.
 git fetch origin
 git checkout "ralph/<TASK-KEY>"
 git pull origin "ralph/<TASK-KEY>"
+git branch --show-current  # verify you're on the right branch
 ```
+
+If a referenced file is missing, verify your current branch before searching git history — you're likely on the wrong branch.
 
 ### 3a. Start Dev Environment & Understand What to Test
 
 1. **Start the dev environment FIRST.** You run inside an isolated git worktree. If the initial message includes "Worktree setup output", follow it **exactly** — use the startup command and URLs it provides, not defaults. Worktrees use allocated ports to avoid conflicts between instances. If no worktree context is provided, read the root README or package.json to find the dev command, commit to one approach — do not cycle between strategies if the first attempt fails.
-2. **Read the issue description and all comments** carefully. Comments from reviewers may specify what testing was missing or what to focus on. Identify the acceptance criteria and expected behavior.
-3. **Targeted code exploration only** — find the specific route/component/API for this task. Do NOT explore the full project architecture. Spend at most 3-4 tool calls on exploration, then move to the browser.
+   - **After switching branches** with a running dev server, wait for hot-reload to settle (use `browser_wait_for` with expected page content) or restart the dev server before resuming browser testing.
+   - If the worktree setup mentions "Test data: seeded", trust it — don't create fixtures manually.
+   - If test data is missing and you can't navigate the feature, ABORT — don't spend time building fixtures.
+2. **Read the issue description and all comments** carefully. Identify the acceptance criteria and expected behavior.
+3. **Targeted code exploration only** — find the specific route/component for this task. Spend at most 3 tool calls on exploration, then move to the browser.
 
-### 3b. Test Using Playwright MCP
+### 3b. Verify in the Browser
 
-Use the **Playwright MCP tools** to drive the browser:
+Use the **Playwright MCP tools** to walk through the feature like a real user:
 
-1. **Navigate** to the relevant pages/routes in the running application.
-2. **Interact** with the UI as a real user: click buttons, fill forms, select dropdowns, toggle switches, scroll, hover.
-3. **Take screenshots** at every significant step as evidence:
-   - Before performing an action (initial state)
-   - After performing an action (result state)
+1. **Navigate** to the relevant page in the running application.
+2. **Interact** with the UI: click buttons, fill forms, select dropdowns, toggle switches.
+3. **Screenshot every step** as evidence:
+   - Initial state before your action
+   - Result state after your action
    - Any error states, modals, or toasts that appear
-4. **Verify visual outcomes**: Does the UI look correct? Are elements present/absent as expected? Do loading states work?
-5. **Inspect network requests** when relevant: use Playwright's network interception to verify API calls, payloads, and responses.
-6. **Test edge cases** like a thorough QA tester:
-   - Empty states
-   - Invalid inputs / validation errors
-   - Boundary values
-   - Rapid clicks / double submissions
-   - Browser back/forward navigation
-   - Responsive behavior if relevant
+4. **Verify visual outcomes**: Are elements present/absent as expected? Does the UI match the acceptance criteria?
+5. **Check network requests** when relevant: verify API calls return expected data.
+6. **Test these common scenarios**:
+   - Happy path (the main flow described in acceptance criteria)
+   - Empty states (no data loaded yet)
+   - Validation errors (submit with missing/invalid input)
 
-### 3c. Write Test Files
+### Not Browser-Testable?
 
-After browser verification, write lasting test coverage where it adds value:
-
-1. **Integration tests**: Test real flows against a real database/API. Minimal mocking. Follow existing test setup and conventions in the codebase.
-2. **Unit tests**: Test pure logic, utilities, and edge cases. Follow existing naming conventions (e.g. `*.test.ts`, `*.spec.ts`).
-3. **Verify**: Run the project's test command (e.g. `npm run test`) to ensure all tests pass.
-
-Skip writing test files if the feature is purely visual or the existing test infrastructure doesn't support it.
-
-### 3d. Check Feasibility
-
-If the feature **cannot be tested via browser** (e.g. pure backend/CLI utility, no UI surface):
-- Skip browser verification and focus on integration/unit tests instead.
+If the feature has **no browser surface** (pure backend, CLI utility, config change):
+- Skip directly to step 4 and mark it complete. You verified what you could.
 
 If blocked by a genuine blocker (app won't start, critical crash, missing environment):
 - Output `<promise>ABORT</promise>`.
 
-**Ralph only works on existing issues assigned to the user.** It does NOT create new issues or subtasks.
-
 ## 4. Update Backlog
 
-After testing is complete:
+After verification is complete:
 
-1. **Remove Label**: Remove `needs-tests`.
-2. **Upload screenshots** as attachments to the Jira issue. Collect the returned `content` URLs from each upload response.
-3. **Add a comment** to the task with a full test report. Reference each screenshot on its own standalone line as `![step description](content-url)` — each renders inline automatically:
-   - **Action**: Tested end-to-end
-   - **Test Steps**: Numbered list of what you did (navigated to X, clicked Y, filled Z)
-   - **Screenshots**: Each on its own line as `![description](content-url)` so it renders inline
-   - **Network Verification**: Summary of API calls verified (if applicable)
-   - **Tests Written**: List of test files created/modified (if any), with test output
-   - **Result**: PASS or FAIL with details
-   - If **FAIL**: Describe exactly what went wrong, expected vs actual behavior, and include the screenshot showing the failure.
-4. **Transition**: Transition to **"In Review"** (so Reviewer can verify the test results).
+1. **Remove Label**: Remove `needs-tests` safely:
+   1. Read current labels from the issue
+   2. Filter out `needs-tests`, keep all others
+   3. Update the issue with the filtered label list as a `fields` object (e.g. `{"labels": [{"name": "kept-label"}]}`)
+2. **Upload screenshots** as attachments to the issue. Collect the returned `content` URLs from each upload response.
+3. **Add a comment** with a clear test report. Reference each screenshot on its own standalone line as `![step description](content-url)`:
+   - **Action**: Browser verification of [feature]
+   - **Steps**: Numbered list of what you did (navigated to X, clicked Y, filled Z)
+   - **Screenshots**: Each on its own line as `![description](content-url)`
+   - **Result**: PASS or FAIL
+   - If **FAIL**: Describe exactly what went wrong — expected vs actual — with the screenshot showing the failure.
+4. **Transition**: Transition to **"In Review"** (so Reviewer can verify the results).
 
 Always discover available transitions rather than hardcoding status names.
 
-## 5. Commit, Push & Stop
+## 5. Release Branch & Stop
 
-If you wrote test files, commit and push:
+You don't write code, so there's nothing to commit. Just undraft the PR and release the branch:
 
-```
-RALPH_TESTER: Tested <TASK-KEY>
-
-Evidence: <brief summary — PASS/FAIL, what was tested>
-```
-
-```bash
-git push origin "ralph/<TASK-KEY>"
-```
-
-**Undraft PR** — mark it ready for review since testing is complete:
 ```bash
 gh pr ready "ralph/<TASK-KEY>"
 ```
 
-### Release the branch
-
-**CRITICAL**: Before stopping, switch back to your workspace branch:
+**CRITICAL**: Before stopping, discard dev server artifacts and switch back to your workspace branch:
 
 ```bash
+git checkout -- .
 git checkout "ralph-workspace/tester-<N>"
 ```
 

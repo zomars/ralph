@@ -22,6 +22,10 @@ export RALPH_POLL_INTERVAL=5
 # Session log directory (unset = no logs saved)
 # export RALPH_LOG_DIR="./ralph-logs"
 
+# Project name — maps to ~/.ralph/projects/<name>/ for worktree overlay files.
+# Defaults to basename of CWD (e.g. "frendor" when invoked from /Users/you/frendor).
+# export RALPH_PROJECT="frendor"
+
 # Worktree setup command — runs every agent start inside the worktree.
 # Auto-detected: if unset and scripts/worktree-setup.sh exists, it runs automatically.
 # export RALPH_WORKTREE_SETUP="bash scripts/worktree-setup.sh && npm install"

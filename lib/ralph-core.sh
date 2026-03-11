@@ -180,6 +180,15 @@ ralph_setup_worktree() {
   git -C "$RALPH_WORKTREE_DIR" add .mcp.json \
     && git -C "$RALPH_WORKTREE_DIR" commit --no-verify -m "ralph: configure MCP servers" 2>/dev/null || true
 
+  # Overlay project-specific files from ~/.ralph/projects/<project>/ into the worktree.
+  # These files live outside both repos — not committed to the target project or ralph.
+  local project_name="${RALPH_PROJECT:-$(basename "$PWD")}"
+  local project_overlay="$HOME/.ralph/projects/$project_name"
+  if [[ -d "$project_overlay" ]]; then
+    cp -r "$project_overlay"/ "$RALPH_WORKTREE_DIR"/
+    ralph_log "Overlaid project files from $project_overlay"
+  fi
+
   # Run project-specific worktree setup.
   # Priority: explicit RALPH_WORKTREE_SETUP > auto-detect scripts/worktree-setup.sh
   # Stdout is captured into RALPH_WORKTREE_CONTEXT for the agent; stderr passes through.
