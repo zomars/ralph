@@ -30,6 +30,42 @@ ralph_init() {
   esac
 }
 
+# ─── Model Resolution ─────────────────────────────────────────────────────────
+
+# ralph_resolve_model <agent_key>
+# Returns the model ID for the given agent. Resolution order:
+#   1. RALPH_<AGENT>_MODEL env var (per-agent override)
+#   2. RALPH_MODEL env var (global override)
+#   3. Built-in default per agent
+# Short aliases: haiku, sonnet, opus → full model IDs
+ralph_resolve_model() {
+  local agent_key="$1"
+  local agent_upper="${agent_key:u}"
+  local var_name="RALPH_${agent_upper}_MODEL"
+  local model="${(P)var_name}"
+
+  if [[ -z "$model" ]]; then
+    model="${RALPH_MODEL:-}"
+  fi
+
+  if [[ -z "$model" ]]; then
+    case "$agent_key" in
+      planner)     model="opus" ;;
+      documenter)  model="haiku" ;;
+      merger)      model="haiku" ;;
+      *)           model="sonnet" ;;
+    esac
+  fi
+
+  # Map short aliases to full model IDs
+  case "$model" in
+    haiku)  echo "claude-haiku-4-5-20251001" ;;
+    sonnet) echo "claude-sonnet-4-6" ;;
+    opus)   echo "claude-opus-4-6" ;;
+    *)      echo "$model" ;;
+  esac
+}
+
 # ─── Agent CLI ────────────────────────────────────────────────────────────────
 
 # ralph_get_agent_cli
@@ -86,9 +122,13 @@ $(cat "$provider_instructions")"
 
   case "$agent_cli" in
     claude)
+      local model
+      model=$(ralph_resolve_model "$agent_key")
+      ralph_log "Model: $model"
       (cd "$work_dir" && claude \
         --verbose \
         --print \
+        --model "$model" \
         --max-turns 100 \
         --output-format stream-json \
         --dangerously-skip-permissions \

@@ -30,5 +30,11 @@ export RALPH_POLL_INTERVAL=5
 # Auto-detected: if unset and scripts/worktree-setup.sh exists, it runs automatically.
 # export RALPH_WORKTREE_SETUP="bash scripts/worktree-setup.sh && npm install"
 
+# Per-agent model override (haiku, sonnet, opus, or raw model ID)
+# Built-in defaults: planner=opus, implementer/reviewer/tester/refactor/fixer=sonnet, documenter/merger=haiku
+# export RALPH_MODEL="sonnet"            # global override for all agents
+# export RALPH_PLANNER_MODEL="opus"      # override specific agent
+# export RALPH_MERGER_MODEL="haiku"
+
 # Merger agent settings
 # export RALPH_MERGE_LABEL="ready-to-merge"  # Label that triggers merger (default: ready-to-merge)
