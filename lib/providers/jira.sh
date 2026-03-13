@@ -86,7 +86,7 @@ provider_rules_to_query() {
   local exclude_blocked
   exclude_blocked=$(echo "$rules" | jq -r '.exclude_blocked // false')
   if [[ "$exclude_blocked" == "true" ]]; then
-    parts+=("issueKey not in linkedIssuesOf('status in (\"To Do\", \"In Progress\")', 'is blocked by')")
+    parts+=("issueKey not in linkedIssuesOf('status != \"Done\"', 'is blocked by')")
   fi
 
   # Build the query

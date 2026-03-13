@@ -26,6 +26,7 @@
         "labels_include": null,
         "labels_exclude": ["needs-input", "needs-tests", "tech-debt", "ralph-blocked", "ralph-failed", "documented"],
         "description_condition": "empty_or_todo_or_label_needs_planning",
+        "exclude_blocked": true,
         "order_by": "created_desc"
       },
       "script": "bin/afk-planner",
