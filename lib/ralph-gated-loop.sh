@@ -72,10 +72,14 @@ Execute your workflow now. Start with Step 1.${worktree_context}"
   }
 
   loop_post_iteration() {
-    # Reset worktree to workspace branch to avoid stale state from timed-out agents
+    # Reset worktree to the repo's default branch (e.g. develop, main)
+    # so the next iteration starts from a clean, up-to-date base.
     local workspace_branch="ralph-workspace/${_agent_key}-${instance_num}"
+    local default_ref="origin/HEAD"
+    git -C "$work_dir" fetch origin --quiet 2>/dev/null || true
     git -C "$work_dir" checkout "$workspace_branch" 2>/dev/null || true
-    git -C "$work_dir" reset --hard HEAD 2>/dev/null || true
+    git -C "$work_dir" reset --hard "$default_ref" 2>/dev/null \
+      || git -C "$work_dir" reset --hard HEAD 2>/dev/null || true
     git -C "$work_dir" clean -fd 2>/dev/null || true
     rm -f "$_task_file" 2>/dev/null
   }

@@ -30,11 +30,16 @@ ralph_setup_worktree() {
         git branch -D "$branch_name" >/dev/null 2>&1 || true
       fi
     fi
+    # Resolve the repo's default branch (e.g. develop, main)
+    local default_ref="origin/HEAD"
+    if ! git rev-parse --verify "$default_ref" &>/dev/null; then
+      default_ref="HEAD"
+    fi
     if git show-ref --verify --quiet "refs/heads/$branch_name"; then
       # Branch persists (checked out elsewhere) — reuse it
       git worktree add "$RALPH_WORKTREE_DIR" "$branch_name" --quiet
     else
-      git worktree add "$RALPH_WORKTREE_DIR" -b "$branch_name" HEAD --quiet
+      git worktree add "$RALPH_WORKTREE_DIR" -b "$branch_name" "$default_ref" --quiet
     fi
   fi
 
