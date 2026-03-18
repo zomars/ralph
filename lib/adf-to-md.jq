@@ -53,7 +53,7 @@ def adf_node:
     ] | join("\n")
 
   elif .type == "orderedList" then
-    [.content[]? | to_entries[] |
+    [.content // [] | to_entries[] |
       "\(.key + 1). " + ([.value.content[]? | adf_inlines] | join("\n   "))
     ] | join("\n")
 
