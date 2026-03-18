@@ -220,7 +220,9 @@ ralph_run_loop() {
 
     wait $child_pid 2>/dev/null || true
     kill $watchdog_pid 2>/dev/null || true; wait $watchdog_pid 2>/dev/null || true
-    kill -9 -$stream_pid 2>/dev/null || true; wait $stream_pid 2>/dev/null || true
+    # Kill the streaming pipeline process group. Don't wait — the MONITOR-launched
+    # job group may not be waitable after unsetopt MONITOR, causing hangs.
+    kill -9 -$stream_pid 2>/dev/null || true
     watchdog_pid=""
     [[ $shutdown -eq 1 ]] && _loop_die
     kill -9 -$child_pid 2>/dev/null || true
