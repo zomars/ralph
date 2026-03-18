@@ -1,5 +1,12 @@
 #!/bin/zsh
 # jira.sh — Jira provider for Ralph
+
+# ADF → Markdown conversion via jq (no Node dependency)
+_jira_adf_to_md() {
+  # Args: $1 = path to JSON file, $2 = jq expression to extract ADF node
+  # Returns: markdown string
+  jq -r "$2" "$1" | jq -r -f "$RALPH_HOME/lib/adf-to-md.jq" 2>/dev/null || echo "(conversion failed)"
+}
 #
 # Implements the provider contract:
 #   PROVIDER_ENV_VARS  — Required environment variables
@@ -91,35 +98,36 @@ provider_write_kb() {
 - **Parent**: $task_parent
 EOF
 
-  # Batch-convert all ADF bodies (description + comments) in one Node call
+  # Convert ADF description to markdown
+  local desc_tmp
+  desc_tmp=$(mktemp)
+  echo "$issue_json" > "$desc_tmp"
+  local desc_md
+  desc_md=$(_jira_adf_to_md "$desc_tmp" '.fields.description')
+  echo "${desc_md:-(no description)}" > "$kb_dir/description.md"
+
+  # Convert ADF comments to markdown
   local comments_count
   comments_count=$(echo "$issue_json" | jq '.fields.comment.comments | length')
-
-  # Build array: [description_adf, comment0_adf, comment1_adf, ...]
-  # Pipe through Node once, write result to temp file to avoid shell mangling
-  local batch_file="$kb_dir/_batch.json"
-  echo "$issue_json" | jq '[.fields.description] + [.fields.comment.comments[]?.body]' \
-    | ralph-adf-to-md --batch > "$batch_file" 2>/dev/null || true
-  if ! jq empty "$batch_file" 2>/dev/null; then
-    echo '[]' > "$batch_file"
-  fi
-
-  # description.md — first element
-  jq -r '.[0] // "(no description)"' "$batch_file" > "$kb_dir/description.md"
-
-  # comments.md — remaining elements, merged with metadata via jq
   if [[ "$comments_count" -gt 0 ]]; then
-    echo "$issue_json" | jq -r --slurpfile bodies "$batch_file" '
-      [.fields.comment.comments | to_entries[] | {
-        author: .value.author.displayName,
-        date: (.value.created | split("T")[0]),
-        body: ($bodies[0][.key + 1] // "(conversion failed)")
-      }] | .[] | "### \(.author) (\(.date))\n\n\(.body)\n\n---\n"
-    ' > "$kb_dir/comments.md"
+    local i=0
+    while (( i < comments_count )); do
+      local author date body
+      author=$(jq -r ".fields.comment.comments[$i].author.displayName" "$desc_tmp")
+      date=$(jq -r ".fields.comment.comments[$i].created | split(\"T\")[0]" "$desc_tmp")
+      body=$(_jira_adf_to_md "$desc_tmp" ".fields.comment.comments[$i].body")
+      echo "### $author ($date)"
+      echo ""
+      echo "$body"
+      echo ""
+      echo "---"
+      echo ""
+      i=$((i + 1))
+    done > "$kb_dir/comments.md"
   else
     echo "(no comments)" > "$kb_dir/comments.md"
   fi
-  rm -f "$batch_file"
+  rm -f "$desc_tmp"
 
   # links.json — [{type, direction, key, summary, status, statusCategory}]
   echo "$issue_json" | jq '[
@@ -165,32 +173,26 @@ provider_render_kb() {
   task_labels=$(jq -r '[.fields.labels[]? | if type == "object" then .name else . end] | join(", ")' "$issue_file")
   task_parent=$(jq -r '.fields.parent.key // "None"' "$issue_file")
 
-  # Batch-convert all ADF (description + comments) in one Node call
-  local batch_file
-  batch_file=$(mktemp)
-  jq '[.fields.description] + [.fields.comment.comments[]?.body]' "$issue_file" \
-    | ralph-adf-to-md --batch > "$batch_file" 2>/dev/null || true
-  # Validate output — ralph-adf-to-md may produce non-JSON on failure
-  if ! jq empty "$batch_file" 2>/dev/null; then
-    echo '[]' > "$batch_file"
-  fi
-
+  # Convert ADF description to markdown
   local desc_md
-  desc_md=$(jq -r '.[0] // "(no description)"' "$batch_file")
+  desc_md=$(_jira_adf_to_md "$issue_file" '.fields.description')
+  desc_md="${desc_md:-(no description)}"
 
+  # Convert ADF comments to markdown
   local comments_md=""
   local comments_count
   comments_count=$(jq '.fields.comment.comments | length' "$issue_file")
   if [[ "$comments_count" -gt 0 ]]; then
-    comments_md=$(jq -r --slurpfile bodies "$batch_file" '
-      [.fields.comment.comments | to_entries[] | {
-        author: .value.author.displayName,
-        date: (.value.created | split("T")[0]),
-        body: ($bodies[0][.key + 1] // "(conversion failed)")
-      }] | .[] | "### \(.author) (\(.date))\n\n\(.body)\n\n---"
-    ' "$issue_file")
+    local i=0
+    while (( i < comments_count )); do
+      local author date body
+      author=$(jq -r ".fields.comment.comments[$i].author.displayName" "$issue_file")
+      date=$(jq -r ".fields.comment.comments[$i].created | split(\"T\")[0]" "$issue_file")
+      body=$(_jira_adf_to_md "$issue_file" ".fields.comment.comments[$i].body")
+      comments_md+="### $author ($date)\n\n$body\n\n---\n"
+      i=$((i + 1))
+    done
   fi
-  rm -f "$batch_file"
 
   # Blocker branches for stacked PRs
   local blockers_md=""
