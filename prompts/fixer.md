@@ -11,7 +11,7 @@
 
 ## 1. Checkout & Assess
 
-The PR to fix is provided in the user message (number, title, url, headRefName, hasConflicts). If no PR is provided → `<promise>COMPLETE</promise>`.
+The PR to fix is provided in the user message (number, title, url, headRefName, hasConflicts, hasCIFailure). If no PR is provided → `<promise>COMPLETE</promise>`.
 
 1. **Checkout the branch:**
    ```bash
@@ -20,8 +20,10 @@ The PR to fix is provided in the user message (number, title, url, headRefName, 
    git pull origin <headRefName>
    ```
 
-2. If `hasConflicts` is true → proceed to Step 2 (Resolve Conflicts).
-   Otherwise → skip to Step 3 (Read & Address Feedback).
+2. Triage:
+   - If `hasConflicts` is true → proceed to Step 2 (Resolve Conflicts).
+   - If `hasCIFailure` is true → skip to Step 2b (Fix CI Failure).
+   - Otherwise → skip to Step 3 (Read & Address Feedback).
 
 ## 2. Resolve Conflicts
 
@@ -47,7 +49,24 @@ The PR to fix is provided in the user message (number, title, url, headRefName, 
    git commit  # accepts the default merge commit message
    ```
 
-Proceed to Step 3 — always check for review feedback even if the PR was picked up for conflicts only.
+Proceed to Step 2b if CI is also failing, otherwise skip to Step 3.
+
+## 2b. Fix CI Failure
+
+1. **Get the failed check runs:**
+   ```bash
+   gh pr checks <number> --json name,state,conclusion,detailsUrl --jq '[.[] | select(.conclusion == "FAILURE")]'
+   ```
+
+2. **Read the CI logs** for each failed check:
+   ```bash
+   gh run view <run_id> --log-failed
+   ```
+   (Extract the run ID from the detailsUrl — it's the number in `/runs/<run_id>/`.)
+
+3. **Diagnose and fix** the build/test errors. Common causes: type errors, missing imports, lint failures, test failures.
+
+4. After fixing, proceed to Step 3 — always check for review feedback too.
 
 ## 3. Read & Address Feedback
 

@@ -38,7 +38,20 @@ ralph_fetch_fixer_prs() {
               nodes { state submittedAt }
             }
             commits(last: 1) {
-              nodes { commit { committedDate } }
+              nodes {
+                commit {
+                  committedDate
+                  statusCheckRollup {
+                    state
+                    contexts(first: 100) {
+                      nodes {
+                        ... on CheckRun { name status conclusion }
+                        ... on StatusContext { context state }
+                      }
+                    }
+                  }
+                }
+              }
             }
           }
         }
@@ -50,10 +63,14 @@ ralph_fetch_fixer_prs() {
         hasChangesRequested: (
           (.commits.nodes[0].commit.committedDate // "1970-01-01T00:00:00Z") as $lastCommit |
           [.latestReviews.nodes[] | select(.state == "CHANGES_REQUESTED" and .submittedAt > $lastCommit)] | length > 0
+        ),
+        hasCIFailure: (
+          [.commits.nodes[0].commit.statusCheckRollup.contexts.nodes[] |
+            select((.conclusion // null) == "FAILURE")] | length > 0
         )
       } as $flags |
-      select($flags.hasUnresolvedThreads or $flags.hasConflicts or $flags.hasChangesRequested) |
-      {number, title, url, headRefName, hasConflicts: $flags.hasConflicts}
+      select($flags.hasUnresolvedThreads or $flags.hasConflicts or $flags.hasChangesRequested or $flags.hasCIFailure) |
+      {number, title, url, headRefName, hasConflicts: $flags.hasConflicts, hasCIFailure: $flags.hasCIFailure}
     ]' 2>/dev/null) || graphql_prs="[]"
 
   echo "$graphql_prs"
