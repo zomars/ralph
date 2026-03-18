@@ -16,7 +16,7 @@ ralph_claim_instance() {
       return
     fi
     # Slot exists — check if holder is still alive
-    if [[ -f "$slot/pid" ]] && ! kill -0 "$(cat "$slot/pid")" 2>/dev/null; then
+    if [[ ! -f "$slot/pid" ]] || ! kill -0 "$(cat "$slot/pid")" 2>/dev/null; then
       rm -rf "$slot"
       continue  # retry same slot
     fi
