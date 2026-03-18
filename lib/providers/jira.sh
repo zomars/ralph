@@ -59,19 +59,56 @@ provider_check_tasks() {
 
 # Check if an issue has unfinished blockers
 # Args: $1 = path to JSON file containing single issue object
+#       $2 = blocker_check mode: "done" (default) or "no_needs_planning"
 # Returns: 0 if no blockers (safe to work), 1 if blocked
 provider_check_blockers() {
   local issue_file="$1"
-  local blocked_count
-  # In Jira's link model, when type.inward == "is blocked by":
-  #   inwardIssue = the issue that blocks us (our blocker)
-  #   outwardIssue = the issue we block
-  blocked_count=$(jq '[
+  local mode="${2:-done}"
+
+  # Extract blocker keys
+  local blocker_keys
+  blocker_keys=$(jq -r '[
     .fields.issuelinks[]?
     | select(.type.inward == "is blocked by" and .inwardIssue)
-    | select(.inwardIssue.fields.status.statusCategory.key != "done")
-  ] | length' "$issue_file")
-  [[ "$blocked_count" -eq 0 ]]
+    | .inwardIssue.key
+  ] | join(" ")' "$issue_file")
+  [[ -z "$blocker_keys" ]] && return 0  # no blockers
+
+  case "$mode" in
+    no_needs_planning)
+      # Blocker is "cleared" once it no longer has the needs-planning label.
+      # Since Jira search doesn't return labels for linked issues, we query
+      # blockers that still have needs-planning via a single JQL call.
+      local key_list=""
+      for k in ${=blocker_keys}; do
+        [[ -n "$key_list" ]] && key_list="$key_list, "
+        key_list="$key_list\"$k\""
+      done
+      local jql="key in ($key_list) AND labels = \"needs-planning\""
+      local body
+      body=$(jq -n --arg jql "$jql" '{"jql":$jql,"maxResults":1,"fields":["key"]}')
+      local tmp
+      tmp=$(mktemp)
+      curl -s --fail-with-body -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
+        -H "Content-Type: application/json" \
+        -X POST -d "$body" \
+        "$JIRA_BASE_URL/rest/api/3/search/jql" > "$tmp" 2>/dev/null || true
+      local still_planning
+      still_planning=$(jq '.issues | length' "$tmp" 2>/dev/null)
+      rm -f "$tmp"
+      [[ "${still_planning:-0}" -eq 0 ]]
+      ;;
+    *)
+      # Default: blocked until all blockers reach "done" status category
+      local blocked_count
+      blocked_count=$(jq '[
+        .fields.issuelinks[]?
+        | select(.type.inward == "is blocked by" and .inwardIssue)
+        | select(.inwardIssue.fields.status.statusCategory.key != "done")
+      ] | length' "$issue_file")
+      [[ "$blocked_count" -eq 0 ]]
+      ;;
+  esac
 }
 
 # Write issue data to KB directory

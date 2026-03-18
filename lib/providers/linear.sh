@@ -85,7 +85,7 @@ provider_check_tasks() {
 }
 
 # Check if an issue has unfinished blockers
-# Args: $1 = path to JSON file (normalized format)
+# Args: $1 = path to JSON file (normalized format), $2 = blocker_check mode (unused)
 # Returns: 0 if no blockers, 1 if blocked
 provider_check_blockers() {
   local issue_file="$1"

@@ -154,6 +154,13 @@ ralph_validate_routing_schema() {
           "\($agent): unknown description_condition \"\(.)\""
         else empty end),
 
+       # blocker_check known enum
+       (if .blocker_check != null then
+          .blocker_check |
+          select(. != "done" and . != "no_needs_planning") |
+          "\($agent): unknown blocker_check \"\(.)\""
+        else empty end),
+
        # order_by known enum
        (if .order_by != null then
           .order_by |
