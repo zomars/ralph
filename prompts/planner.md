@@ -24,6 +24,8 @@ From the query results (already sorted by priority):
 
 Fetch the chosen issue's full details using the backlog task detail tool.
 
+**Dependency gate**: Check `fields.issuelinks` for any link where `type.inward == "is blocked by"` AND there is an `outwardIssue` (the blocker). If ANY blocker's `status.statusCategory.key` is NOT `"done"`, this task has unfinished prerequisites — skip it and output `<promise>COMPLETE</promise>`.
+
 ## 3. Plan & Refine
 
 **Goal**: Turn a vague idea into a workable specification.

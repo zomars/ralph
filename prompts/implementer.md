@@ -27,6 +27,8 @@ From the query results (already sorted by priority):
 
 Fetch the chosen issue's full details using the backlog task detail tool.
 
+**CRITICAL — Dependency gate**: Check `fields.issuelinks` for any link where `type.inward == "is blocked by"` AND there is an `outwardIssue` (the blocker). If ANY blocker's `status.statusCategory.key` is NOT `"done"`, this task has unfinished prerequisites. **Skip it** — do NOT work on it. Instead, output `<promise>COMPLETE</promise>` (the blocker must be completed first).
+
 **CRITICAL**: Check the `comment` field in the issue details.
 
 - If there are recent comments from reviewers or other agents, **READ THEM CAREFULLY**.
