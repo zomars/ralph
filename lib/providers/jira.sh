@@ -99,7 +99,10 @@ EOF
   # Pipe through Node once, write result to temp file to avoid shell mangling
   local batch_file="$kb_dir/_batch.json"
   echo "$issue_json" | jq '[.fields.description] + [.fields.comment.comments[]?.body]' \
-    | ralph-adf-to-md --batch > "$batch_file" 2>/dev/null || echo '[]' > "$batch_file"
+    | ralph-adf-to-md --batch > "$batch_file" 2>/dev/null || true
+  if ! jq empty "$batch_file" 2>/dev/null; then
+    echo '[]' > "$batch_file"
+  fi
 
   # description.md — first element
   jq -r '.[0] // "(no description)"' "$batch_file" > "$kb_dir/description.md"
@@ -166,7 +169,11 @@ provider_render_kb() {
   local batch_file
   batch_file=$(mktemp)
   jq '[.fields.description] + [.fields.comment.comments[]?.body]' "$issue_file" \
-    | ralph-adf-to-md --batch > "$batch_file" 2>/dev/null || echo '[]' > "$batch_file"
+    | ralph-adf-to-md --batch > "$batch_file" 2>/dev/null || true
+  # Validate output — ralph-adf-to-md may produce non-JSON on failure
+  if ! jq empty "$batch_file" 2>/dev/null; then
+    echo '[]' > "$batch_file"
+  fi
 
   local desc_md
   desc_md=$(jq -r '.[0] // "(no description)"' "$batch_file")
