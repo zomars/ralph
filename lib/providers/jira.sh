@@ -21,17 +21,23 @@ provider_fetch_tasks() {
   local body
   body=$(jq -n --arg jql "$query" --argjson max "$max_results" \
     '{"jql":$jql,"maxResults":$max,"fields":["summary","status","labels","priority","issuelinks","comment","parent","attachment","description","created","updated"]}')
-  local response
-  if ! response=$(curl -s --fail-with-body -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
+  # Write directly to a temp file — never store Jira JSON in a zsh variable.
+  # Jira ADF descriptions contain literal newlines inside JSON strings that
+  # get corrupted by zsh variable expansion + echo.
+  local tmp
+  tmp=$(mktemp)
+  if ! curl -s --fail-with-body -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
     -H "Content-Type: application/json" \
     -X POST \
     -d "$body" \
-    "$JIRA_BASE_URL/rest/api/3/search/jql" 2>&1); then
-    ralph_error "Provider fetch failed: $response"
+    "$JIRA_BASE_URL/rest/api/3/search/jql" > "$tmp" 2>&1; then
+    ralph_error "Provider fetch failed: $(cat "$tmp")"
+    rm -f "$tmp"
     echo '{"issues":[]}'
     return 1
   fi
-  echo "$response"
+  cat "$tmp"
+  rm -f "$tmp"
 }
 
 # Check if tasks exist for the given query

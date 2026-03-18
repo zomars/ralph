@@ -1,283 +1,86 @@
 #!/bin/zsh
-# ralph-gated-loop.sh — Parameterized backlog-gated AFK loop
+# ralph-gated-loop.sh — Backlog-gated AFK loop (thin wrapper over ralph-loop.sh)
 #
 # Usage: source this file, then call ralph_gated_loop <agent_key> <agent_name>
 
-ralph_claim_instance() {
-  local agent_key="$1"
-  local base_dir="/tmp/ralph-${agent_key}"
-  mkdir -p "$base_dir"
-  local i=1
-  while true; do
-    local slot="$base_dir/$i"
-    if mkdir "$slot" 2>/dev/null; then
-      echo $$ > "$slot/pid"
-      echo "$i"
-      return
-    fi
-    # Slot exists — check if holder is still alive
-    if [[ ! -f "$slot/pid" ]] || ! kill -0 "$(cat "$slot/pid")" 2>/dev/null; then
-      rm -rf "$slot"
-      continue  # retry same slot
-    fi
-    i=$((i + 1))
-  done
-}
+source "$RALPH_HOME/lib/ralph-loop.sh"
 
 ralph_gated_loop_once() {
   ralph_gated_loop "$1" "$2" 1
 }
 
 ralph_gated_loop() {
-  local agent_key="$1"
-  local agent_name="$2"
-  local max_iterations="${3:-0}"  # 0 = unlimited
+  local _agent_key="$1"
+  local _agent_name="$2"
+  local _max_iterations="${3:-0}"
 
-  # ─── Init ─────────────────────────────────────────────────────────────────
-  source "$RALPH_HOME/lib/ralph-core.sh"
-  ralph_init
-  ralph_load_provider
+  # Temp file for single-task data (used by pick/render)
+  local _task_file="/tmp/ralph-${_agent_key}-$$-task.json"
 
-  # ─── Instance slot ────────────────────────────────────────────────────────
-  local instance_num instance_slot
-  instance_num=$(ralph_claim_instance "$agent_key")
-  instance_slot="/tmp/ralph-${agent_key}/${instance_num}"
+  # ─── Callbacks ──────────────────────────────────────────────────────────
 
-  # ─── Session log ────────────────────────────────────────────────────────
-  local session_log="$instance_slot/session.log"
-
-  # ─── Worktree ───────────────────────────────────────────────────────────
-  local project_dir="$PWD"
-  ralph_setup_worktree "$agent_key" "$instance_num"
-  local work_dir="$RALPH_WORKTREE_DIR"
-
-  # Validate provider-specific env vars
-  ralph_validate_env $PROVIDER_ENV_VARS
-
-  # Resolve paths
-  local query prompt_file provider_instructions poll_interval
-  query="$(ralph_get_query "$agent_key")"
-  prompt_file="$(ralph_get_prompt "$agent_key")"
-  provider_instructions="$(ralph_get_provider_instructions)"
-  poll_interval="$(ralph_get_poll_interval)"
-
-  if [[ ! -f "$prompt_file" ]]; then
-    ralph_error "Prompt not found: $prompt_file"
-    exit 1
-  fi
-
-  if [[ ! -f "$provider_instructions" ]]; then
-    ralph_error "Provider instructions not found: $provider_instructions"
-    exit 1
-  fi
-
-  # ─── jq filters ─────────────────────────────────────────────────────────
-  ralph_get_jq_filters
-  local stream_text="$RALPH_STREAM_FILTER"
-  local final_result="$RALPH_RESULT_FILTER"
-
-  # ─── State ──────────────────────────────────────────────────────────────
-  local iteration=0
-  local tmpfile=""
-  local child_pid=""
-  local shutdown=0
-  local consecutive_empty=0
-  local max_consecutive_empty="${RALPH_MAX_EMPTY_ITERATIONS:-5}"
-
-  trap 'shutdown=1; [[ -n "$child_pid" ]] && kill -INT -$child_pid 2>/dev/null' INT TERM HUP
-  local last_task_key=""
-
-  die() {
-    ralph_save_session_log "$session_log" "$agent_key" "$instance_num" "$last_task_key"
-    ralph_titlebar_cleanup
-    printf "\nShutting down.\n"
-    rm -f "$tmpfile" "$tasks_file" "$task_file" 2>/dev/null
-    tmpfile=""
-    rm -rf "$instance_slot" 2>/dev/null
-    ralph_cleanup_worktree "$work_dir"
-    [[ -n "$child_pid" ]] && kill -9 -$child_pid 2>/dev/null
-    exit 1
+  loop_init() {
+    ralph_load_provider
   }
 
-  # Temp files for JSON data flow (avoids zsh variable mangling of control chars)
-  local tasks_file="/tmp/ralph-${agent_key}-${instance_num}-tasks.json"
-  local task_file="/tmp/ralph-${agent_key}-${instance_num}-task.json"
-  trap 'ralph_save_session_log "$session_log" "$agent_key" "$instance_num" "$last_task_key"; ralph_titlebar_cleanup; rm -f "$tmpfile" "$tasks_file" "$task_file" 2>/dev/null; rm -rf "$instance_slot" 2>/dev/null; ralph_cleanup_worktree "$work_dir"; [[ -n "$child_pid" ]] && kill -9 -$child_pid 2>/dev/null' EXIT
+  loop_fetch_work() {
+    local query
+    query="$(ralph_get_query "$_agent_key")"
+    provider_fetch_tasks "$query" 10 > "$LOOP_WORK_FILE"
+  }
 
-  # ─── Early exit for bounded runs with no work (before titlebar clears screen)
-  local has_prefetch=0
-  if [[ "$max_iterations" -gt 0 ]]; then
-    provider_fetch_tasks "$query" 10 > "$tasks_file"
-    has_prefetch=1
-    local early_count
-    early_count=$(jq '.issues | length' "$tasks_file")
-    if [[ "$early_count" -lt "$instance_num" ]]; then
-      ralph_log "${agent_name} #$instance_num: No tasks available ($early_count found). Nothing to do."
-      rm -rf "$instance_slot" 2>/dev/null
-      exit 0
-    fi
-  fi
+  loop_count_work() {
+    jq '.issues | length' "$LOOP_WORK_FILE"
+  }
 
-  ralph_titlebar_init
-
-  # ─── Main loop ──────────────────────────────────────────────────────────
-  while true; do
-    # Re-create worktree if it disappeared (e.g. cleaned by OS or another process)
-    if [[ ! -d "$work_dir" ]]; then
-      ralph_log "Worktree missing ($work_dir). Recreating..."
-      ralph_setup_worktree "$agent_key" "$instance_num"
-      work_dir="$RALPH_WORKTREE_DIR"
-    fi
-
-    # Fetch full task data (reuse prefetch on first iteration)
-    if [[ "$has_prefetch" -eq 1 ]]; then
-      has_prefetch=0
-    else
-      provider_fetch_tasks "$query" 10 > "$tasks_file"
-    fi
+  loop_pick_work() {
+    # instance_num is set by ralph_run_loop in the parent scope (zsh dynamic scoping)
     local task_count
-    task_count=$(jq '.issues | length' "$tasks_file")
-
-    if [[ "$task_count" -lt "$instance_num" ]]; then
-      if [[ "$max_iterations" -gt 0 ]]; then
-        ralph_log "${agent_name} #$instance_num: No tasks available ($task_count found). Nothing to do."
-        exit 0
-      fi
-      ralph_log "Not enough tasks for instance #$instance_num ($task_count available). Sleeping ${poll_interval}s..."
-      ralph_cooldown "$poll_interval" "${(U)agent_name} #$instance_num | Waiting" || die
-      continue
-    fi
-
-    # Pick the Nth unblocked task for this instance
-    local task_key="" unblocked_seen=0 pick_idx=0
+    task_count=$(loop_count_work)
+    local unblocked_seen=0 pick_idx=0
     while (( pick_idx < task_count )); do
-      jq ".issues[$pick_idx]" "$tasks_file" > "$task_file"
-      if provider_check_blockers "$task_file"; then
+      jq ".issues[$pick_idx]" "$LOOP_WORK_FILE" > "$_task_file"
+      if provider_check_blockers "$_task_file"; then
         unblocked_seen=$((unblocked_seen + 1))
         if (( unblocked_seen == instance_num )); then
-          task_key=$(jq -r '.key' "$task_file")
-          break
+          LOOP_TASK_KEY=$(jq -r '.key' "$_task_file")
+          LOOP_TASK_DISPLAY="Task: $LOOP_TASK_KEY"
+          return 0
         fi
       else
-        ralph_log "Skipping $(jq -r '.key' "$task_file") (blocked)"
+        ralph_log "Skipping $(jq -r '.key' "$_task_file") (blocked)"
       fi
       pick_idx=$((pick_idx + 1))
     done
+    return 1
+  }
 
-    if [[ -z "$task_key" ]]; then
-      if [[ "$max_iterations" -gt 0 ]]; then
-        ralph_log "${agent_name} #$instance_num: No unblocked tasks for this instance. Nothing to do."
-        exit 0
-      fi
-      ralph_log "No unblocked tasks for instance #$instance_num. Sleeping ${poll_interval}s..."
-      ralph_cooldown "$poll_interval" "${(U)agent_name} #$instance_num | Waiting" || die
-      continue
-    fi
+  loop_build_context() {
+    local task_kb worktree_context=""
+    task_kb=$(provider_render_kb "$_task_file")
 
-    # Build KB as inline markdown
-    local task_kb
-    task_kb=$(provider_render_kb "$task_file")
-    last_task_key="$task_key"
-
-    iteration=$((iteration + 1))
-    tmpfile=$(mktemp)
-
-    ralph_titlebar_update "${(U)agent_name} #$instance_num | Iteration $iteration | Task: $task_key | $(date '+%H:%M:%S')"
-    echo "------- ${(U)agent_name} #$instance_num ITERATION $iteration (Task: $task_key) --------"
-
-    # Write iteration marker to session log
-    echo '{"type":"_ralph_marker","iteration":'$iteration',"timestamp":"'$(date -Iseconds)'","task":"'$task_key'"}' >> "$session_log"
-
-    local initial_message worktree_context=""
     if [[ -n "${RALPH_WORKTREE_CONTEXT:-}" ]]; then
       worktree_context="
 Worktree setup output (use this for ports, domains, and dev environment details):
 $RALPH_WORKTREE_CONTEXT"
     fi
-    initial_message="You are RALPH_${(U)agent_key}, instance $instance_num. Your worktree is: $work_dir (project root: $project_dir).
+    echo "You are RALPH_${(U)_agent_key}, instance $instance_num. Your worktree is: $work_dir (project root: $project_dir).
 
 $task_kb
 
 Execute your workflow now. Start with Step 1.${worktree_context}"
+  }
 
-    local max_iteration_seconds="${RALPH_MAX_ITERATION_SECONDS:-1800}"
-
-    # Write Claude output to a file (not a pipe). Child processes spawned by
-    # Claude's Bash tool inherit pipe fds via fork(); if they outlive Claude
-    # (e.g. dev servers), the pipe never gets EOF and `wait` blocks forever.
-    # Writing to a file avoids this: `wait` returns when Claude exits.
-    local raw_output=$(mktemp)
-
-    setopt MONITOR
-    {
-      ralph_exec_llm "$agent_key" "$instance_num" "$work_dir" "$prompt_file" "$provider_instructions" "$initial_message" \
-        </dev/null >"$raw_output" &
-    } 2>/dev/null
-    child_pid=$!
-    unsetopt MONITOR
-
-    # Stream output for real-time display and session log
-    ( tail -f -n +1 "$raw_output" | grep --line-buffered '^{' \
-      | tee -a "$session_log" | jq --unbuffered -rj "$stream_text" ) &
-    local stream_pid=$!
-
-    # Watchdog: force-kill if Claude hangs after max_turns
-    local watchdog_pid=""
-    ( sleep "$max_iteration_seconds" && ralph_log "Iteration timeout (${max_iteration_seconds}s). Force-killing..." && kill -9 -$child_pid 2>/dev/null ) &
-    watchdog_pid=$!
-
-    wait $child_pid 2>/dev/null || true
-    kill $watchdog_pid 2>/dev/null; wait $watchdog_pid 2>/dev/null || true
-    kill $stream_pid 2>/dev/null; wait $stream_pid 2>/dev/null || true
-    watchdog_pid=""
-    [[ $shutdown -eq 1 ]] && die
-    kill -9 -$child_pid 2>/dev/null || true
-    child_pid=""
-
-    # Kill orphaned processes (dev servers, MCP servers) left in the worktree
-    ralph_cleanup_worktree_processes "$work_dir"
-
-    # Build tmpfile from complete output (stream may have lagged)
-    grep '^{' "$raw_output" > "$tmpfile" 2>/dev/null || true
-    rm -f "$raw_output"
-
+  loop_post_iteration() {
     # Reset worktree to workspace branch to avoid stale state from timed-out agents
-    local workspace_branch="ralph-workspace/${agent_key}-${instance_num}"
+    local workspace_branch="ralph-workspace/${_agent_key}-${instance_num}"
     git -C "$work_dir" checkout "$workspace_branch" 2>/dev/null || true
     git -C "$work_dir" reset --hard HEAD 2>/dev/null || true
     git -C "$work_dir" clean -fd 2>/dev/null || true
+    rm -f "$_task_file" 2>/dev/null
+  }
 
-    local result
-    result=$(jq -r "$final_result" "$tmpfile" 2>/dev/null || true)
-    last_task_key=$(ralph_extract_task_key "$tmpfile")
+  # ─── Run ────────────────────────────────────────────────────────────────
 
-    # Detect empty iterations (Claude crashed or produced no output)
-    if [[ ! -s "$tmpfile" ]]; then
-      consecutive_empty=$((consecutive_empty + 1))
-      ralph_error "Empty output from Claude (consecutive: $consecutive_empty/$max_consecutive_empty)"
-      if (( consecutive_empty >= max_consecutive_empty )); then
-        ralph_error "Too many consecutive empty iterations. Aborting."
-        rm -f "$tmpfile"
-        exit 1
-      fi
-    else
-      consecutive_empty=0
-    fi
-
-    rm -f "$tmpfile"
-    tmpfile=""
-
-    if [[ "$result" == *"<promise>ABORT</promise>"* ]]; then
-      echo "Ralph ($agent_name) aborted at iteration $iteration."
-      exit 1
-    fi
-
-    if [[ "$max_iterations" -gt 0 && "$iteration" -ge "$max_iterations" ]]; then
-      ralph_log "Iteration complete. Exiting ($iteration/$max_iterations iterations)."
-      exit 0
-    fi
-
-    ralph_log "Iteration complete. Cooldown ${poll_interval}s..."
-    ralph_cooldown "$poll_interval" "${(U)agent_name} #$instance_num | Cooldown" || die
-  done
+  ralph_run_loop "$_agent_key" "$_agent_name" "$_max_iterations"
 }

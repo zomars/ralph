@@ -805,14 +805,11 @@ check_core() {
 
   # ─── Story 7: Titlebar contains iteration number ──────────────────────
 
-  if grep -q 'Iteration $iteration' "$RALPH_HOME/lib/ralph-gated-loop.sh"; then
+  if grep -q 'Iteration $iteration' "$RALPH_HOME/lib/ralph-loop.sh"; then
     assert_ok "Gated loop titlebar shows iteration number"
-  else
-    assert_fail "Gated loop titlebar shows iteration number"
-  fi
-  if grep -q 'Iteration $iteration' "$RALPH_HOME/lib/ralph-github-loop.sh"; then
     assert_ok "GitHub loop titlebar shows iteration number"
   else
+    assert_fail "Gated loop titlebar shows iteration number"
     assert_fail "GitHub loop titlebar shows iteration number"
   fi
 

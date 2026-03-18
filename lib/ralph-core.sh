@@ -1,5 +1,17 @@
 #!/bin/zsh
 # ralph-core.sh — Shared functions for Ralph agent ecosystem
+#
+# Sources sub-modules so existing `source ralph-core.sh` callers work unchanged.
+
+# ─── Sub-modules ─────────────────────────────────────────────────────────────
+
+_ralph_lib_dir="${0:A:h}"
+[[ -z "$_ralph_lib_dir" || ! -d "$_ralph_lib_dir" ]] && _ralph_lib_dir="$RALPH_HOME/lib"
+
+source "$_ralph_lib_dir/ralph-llm.sh"
+source "$_ralph_lib_dir/ralph-worktree.sh"
+source "$_ralph_lib_dir/ralph-titlebar.sh"
+source "$_ralph_lib_dir/ralph-session.sh"
 
 # ─── Init ─────────────────────────────────────────────────────────────────────
 
@@ -28,255 +40,6 @@ ralph_init() {
       exit 1
       ;;
   esac
-}
-
-# ─── Model Resolution ─────────────────────────────────────────────────────────
-
-# ralph_resolve_model <agent_key>
-# Returns the model ID for the given agent. Resolution order:
-#   1. RALPH_<AGENT>_MODEL env var (per-agent override)
-#   2. RALPH_MODEL env var (global override)
-#   3. Built-in default per agent
-# Short aliases: haiku, sonnet, opus → full model IDs
-ralph_resolve_model() {
-  local agent_key="$1"
-  local agent_upper="${agent_key:u}"
-  local var_name="RALPH_${agent_upper}_MODEL"
-  local model="${(P)var_name}"
-
-  if [[ -z "$model" ]]; then
-    model="${RALPH_MODEL:-}"
-  fi
-
-  if [[ -z "$model" ]]; then
-    case "$agent_key" in
-      planner)     model="opus" ;;
-      documenter)  model="haiku" ;;
-      merger)      model="haiku" ;;
-      *)           model="sonnet" ;;
-    esac
-  fi
-
-  # Map short aliases to full model IDs
-  case "$model" in
-    haiku)  echo "claude-haiku-4-5-20251001" ;;
-    sonnet) echo "claude-sonnet-4-6" ;;
-    opus)   echo "claude-opus-4-6" ;;
-    *)      echo "$model" ;;
-  esac
-}
-
-# ─── Agent CLI ────────────────────────────────────────────────────────────────
-
-# ralph_get_agent_cli
-# Returns the command to invoke the configured agent CLI.
-ralph_get_agent_cli() {
-  case "$RALPH_MODEL_PROVIDER" in
-    gemini) echo "gemini" ;;
-    codex)  echo "codex" ;;
-    *)      echo "claude" ;;
-  esac
-}
-
-# ralph_get_jq_filters
-# Returns the jq filters for streaming and result extraction based on the provider.
-# Sets RALPH_STREAM_FILTER and RALPH_RESULT_FILTER.
-ralph_get_jq_filters() {
-  case "$RALPH_MODEL_PROVIDER" in
-    gemini)
-      # Gemini stream-json: {"type":"message","role":"assistant","content":"..."}
-      export RALPH_STREAM_FILTER='select(.type == "message" and .role == "assistant").content // empty | gsub("\n"; "\r\n") | . + "\r\n\n"'
-      # Gemini result event has no text — scan all assistant messages for promise detection
-      export RALPH_RESULT_FILTER='select(.type == "message" and .role == "assistant").content // empty'
-      ;;
-    codex)
-      # Codex --json: {"type":"item.completed","item":{"type":"agent_message","text":"..."}}
-      export RALPH_STREAM_FILTER='select(.type == "item.completed").item | select(.type == "agent_message").text // empty | gsub("\n"; "\r\n") | . + "\r\n\n"'
-      # Scan all agent_message items for promise detection
-      export RALPH_RESULT_FILTER='select(.type == "item.completed").item | select(.type == "agent_message").text // empty'
-      ;;
-    *)
-      # Default (Claude)
-      export RALPH_STREAM_FILTER='select(.type == "assistant").message.content[]? | select(.type == "text").text // empty | gsub("\n"; "\r\n") | . + "\r\n\n"'
-      export RALPH_RESULT_FILTER='select(.type == "result").result // empty'
-      ;;
-  esac
-}
-
-# ralph_exec_llm <agent_key> <instance_num> <work_dir> <prompt_file> <provider_instructions> <initial_message>
-# Executes the configured LLM CLI with provider-specific flags.
-# Outputs stream-json to stdout.
-ralph_exec_llm() {
-  local agent_key="$1" instance_num="$2" work_dir="$3" prompt_file="$4" provider_instructions="$5" initial_message="$6"
-  local agent_cli
-  agent_cli=$(ralph_get_agent_cli)
-
-  local full_system_prompt
-  if [[ -n "$provider_instructions" && -f "$provider_instructions" ]]; then
-    full_system_prompt="$(cat "$prompt_file")
-
-$(cat "$provider_instructions")"
-  else
-    full_system_prompt="$(cat "$prompt_file")"
-  fi
-
-  case "$agent_cli" in
-    claude)
-      local model
-      model=$(ralph_resolve_model "$agent_key")
-      ralph_log "Model: $model"
-      (cd "$work_dir" && claude \
-        --verbose \
-        --print \
-        --model "$model" \
-        --max-turns 100 \
-        --output-format stream-json \
-        --dangerously-skip-permissions \
-        --append-system-prompt "$full_system_prompt" \
-        "$initial_message")
-      ;;
-    gemini)
-      # GEMINI_SYSTEM_MD replaces built-in system prompt with file contents
-      # --approval-mode yolo auto-approves all tool calls (--yolo is deprecated)
-      # Positional arg triggers headless mode (--prompt/-p is deprecated)
-      local sys_tmp
-      sys_tmp=$(mktemp)
-      echo "$full_system_prompt" > "$sys_tmp"
-
-      (cd "$work_dir" && GEMINI_SYSTEM_MD="$sys_tmp" gemini \
-        --debug \
-        --approval-mode yolo \
-        --max-turns 100 \
-        --output-format stream-json \
-        "$initial_message")
-      local exit_code=$?
-      rm -f "$sys_tmp"
-      return $exit_code
-      ;;
-    codex)
-      # Codex reads AGENTS.override.md from project root for instructions
-      # codex exec runs in headless mode; --json produces JSONL to stdout
-      echo "$full_system_prompt" > "$work_dir/AGENTS.override.md"
-
-      (cd "$work_dir" && codex exec \
-        --dangerously-bypass-approvals-and-sandbox \
-        --json \
-        "$initial_message")
-      local exit_code=$?
-      rm -f "$work_dir/AGENTS.override.md"
-      return $exit_code
-      ;;
-  esac
-}
-
-# ─── Worktrees ────────────────────────────────────────────────────────────────
-
-# ralph_setup_worktree <agent_key> <instance_num>
-# Creates (or reuses) a persistent git worktree for this agent instance.
-# Sets globals: RALPH_WORKTREE_DIR (path) and RALPH_WORKTREE_CONTEXT (setup output).
-# Must be called directly (not in a subshell) so globals propagate to the caller.
-# Runs RALPH_WORKTREE_SETUP if set, otherwise auto-detects scripts/worktree-setup.sh.
-ralph_setup_worktree() {
-  local agent_key="$1" instance_num="$2"
-  # Return values via globals (not stdout) to avoid $() subshell losing exports
-  RALPH_WORKTREE_DIR="/tmp/ralph-worktrees/${agent_key}-${instance_num}"
-  RALPH_WORKTREE_CONTEXT=""
-
-  # Check for valid worktree (not just directory existence — stale dirs without .git happen)
-  if [[ ! -d "$RALPH_WORKTREE_DIR" ]] || ! git -C "$RALPH_WORKTREE_DIR" rev-parse --git-dir &>/dev/null; then
-    rm -rf "$RALPH_WORKTREE_DIR" 2>/dev/null || true
-    local branch_name="ralph-workspace/${agent_key}-${instance_num}"
-    # Remove stale worktree entry if git still tracks it
-    git worktree prune 2>/dev/null || true
-    # Delete stale branch if it exists but worktree is gone
-    git branch -D "$branch_name" >/dev/null 2>&1 || true
-    if git show-ref --verify --quiet "refs/heads/$branch_name"; then
-      # Branch still exists — likely checked out in main repo. Switch main repo away.
-      local main_branch
-      main_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||') || main_branch="main"
-      if [[ "$(git symbolic-ref --short HEAD 2>/dev/null)" == "$branch_name" ]]; then
-        ralph_log "Main repo on workspace branch $branch_name — switching to $main_branch"
-        git checkout "$main_branch" --quiet 2>/dev/null || true
-        git branch -D "$branch_name" >/dev/null 2>&1 || true
-      fi
-    fi
-    if git show-ref --verify --quiet "refs/heads/$branch_name"; then
-      # Branch persists (checked out elsewhere) — reuse it
-      git worktree add "$RALPH_WORKTREE_DIR" "$branch_name" --quiet
-    else
-      git worktree add "$RALPH_WORKTREE_DIR" -b "$branch_name" HEAD --quiet
-    fi
-  fi
-
-  # Build .mcp.json: start from project's copy (or empty), layer provider MCP on top,
-  # then commit so reset --hard between iterations preserves it.
-  git show HEAD:.mcp.json > "$RALPH_WORKTREE_DIR/.mcp.json" 2>/dev/null \
-    || echo '{}' > "$RALPH_WORKTREE_DIR/.mcp.json"
-
-  if [[ -n "${PROVIDER_MCP_NAME:-}" ]] && command -v "${PROVIDER_MCP_CMD:-}" &>/dev/null; then
-    jq --arg n "$PROVIDER_MCP_NAME" --arg c "$PROVIDER_MCP_CMD" \
-      '.mcpServers[$n] = {"command": $c}' "$RALPH_WORKTREE_DIR/.mcp.json" \
-      > "$RALPH_WORKTREE_DIR/.mcp.json.tmp" && mv "$RALPH_WORKTREE_DIR/.mcp.json.tmp" "$RALPH_WORKTREE_DIR/.mcp.json"
-  fi
-
-  git -C "$RALPH_WORKTREE_DIR" add .mcp.json \
-    && git -C "$RALPH_WORKTREE_DIR" commit --no-verify -m "ralph: configure MCP servers" 2>/dev/null || true
-
-  # Overlay project-specific files from ~/.ralph/projects/<project>/ into the worktree.
-  # These files live outside both repos — not committed to the target project or ralph.
-  local project_name="${RALPH_PROJECT:-$(basename "$PWD")}"
-  local project_overlay="$HOME/.ralph/projects/$project_name"
-  if [[ -d "$project_overlay" ]]; then
-    cp -r "$project_overlay"/ "$RALPH_WORKTREE_DIR"/
-    ralph_log "Overlaid project files from $project_overlay"
-  fi
-
-  # Run project-specific worktree setup.
-  # Priority: explicit RALPH_WORKTREE_SETUP > auto-detect scripts/worktree-setup.sh
-  # Stdout is captured into RALPH_WORKTREE_CONTEXT for the agent; stderr passes through.
-  local setup_cmd="${RALPH_WORKTREE_SETUP:-}"
-  if [[ -z "$setup_cmd" && -f "$RALPH_WORKTREE_DIR/scripts/worktree-setup.sh" ]]; then
-    setup_cmd="bash scripts/worktree-setup.sh"
-  fi
-  if [[ -n "$setup_cmd" ]]; then
-    ralph_log "Running worktree setup: $setup_cmd"
-    local setup_output=""
-    setup_output=$(cd "$RALPH_WORKTREE_DIR" && eval "$setup_cmd") || {
-      ralph_error "Worktree setup failed (exit $?). Continuing anyway."
-    }
-    if [[ -n "$setup_output" ]]; then
-      RALPH_WORKTREE_CONTEXT="$setup_output"
-      ralph_log "Worktree context captured (${#setup_output} bytes)"
-    fi
-  fi
-}
-
-# ralph_cleanup_worktree <work_dir>
-# Removes a worktree directory and its tracking branch.
-ralph_cleanup_worktree() {
-  local work_dir="$1"
-  [[ -d "$work_dir" ]] && git worktree remove "$work_dir" --force 2>/dev/null || true
-  git worktree prune 2>/dev/null || true
-}
-
-# ralph_cleanup_worktree_processes <work_dir>
-# Kills any processes still referencing the worktree directory.
-# Catches orphaned dev servers, MCP servers, etc. that survive after Claude exits.
-ralph_cleanup_worktree_processes() {
-  local work_dir="$1"
-  [[ -z "$work_dir" ]] && return
-  local my_pid=$$
-  local pids=()
-  local pid
-  for pid in $(pgrep -f "$work_dir" 2>/dev/null); do
-    [[ "$pid" == "$my_pid" ]] && continue
-    pids+=("$pid")
-  done
-  (( ${#pids} == 0 )) && return
-  ralph_log "Cleaning up ${#pids} lingering process(es) in worktree..."
-  kill -TERM "${pids[@]}" 2>/dev/null
-  sleep 2
-  kill -9 "${pids[@]}" 2>/dev/null || true
 }
 
 # ─── Logging ──────────────────────────────────────────────────────────────────
@@ -325,6 +88,159 @@ ralph_load_provider() {
     exit 1
   fi
   source "$provider_script"
+
+  # Validate provider interface
+  local required=(provider_fetch_tasks provider_check_tasks provider_check_blockers
+                  provider_render_kb provider_write_kb provider_rules_to_query)
+  local func
+  for func in "${required[@]}"; do
+    if ! typeset -f "$func" > /dev/null 2>&1; then
+      ralph_error "Provider '$RALPH_PROVIDER' missing required function: $func"
+      exit 1
+    fi
+  done
+
+  # Validate PROVIDER_ENV_VARS is set
+  if [[ -z "${PROVIDER_ENV_VARS+x}" ]]; then
+    ralph_error "Provider '$RALPH_PROVIDER' must define PROVIDER_ENV_VARS array"
+    exit 1
+  fi
+
+  # Validate routing.json schema
+  ralph_validate_routing_schema
+}
+
+# ─── Routing Schema Validation ────────────────────────────────────────────────
+
+ralph_validate_routing_schema() {
+  local routing_json
+  routing_json="$(ralph_get_routing_json)"
+  [[ ! -f "$routing_json" ]] && return  # no routing.json = nothing to validate
+
+  local errors
+  errors=$(jq -r '
+    def check:
+      # Top-level keys
+      (if .statuses | type != "array" then "statuses must be an array" else empty end),
+      (if .labels | type != "array" then "labels must be an array" else empty end),
+      (if .agents | type != "object" then "agents must be an object" else empty end),
+
+      # Per-agent rules
+      (.statuses as $statuses | .labels as $labels |
+       .agents | to_entries[] |
+       .key as $agent | .value.rules // empty |
+
+       # status_in must be array with values in statuses
+       (if .status_in | type != "array" then "\($agent): rules.status_in must be an array"
+        else (.status_in[] | select(. as $s | $statuses | index($s) | not) |
+              "\($agent): unknown status \"\(.)\" in status_in") end),
+
+       # labels_include values in labels (if present)
+       (if .labels_include != null and (.labels_include | type == "array") then
+          .labels_include[] | select(. as $l | $labels | index($l) | not) |
+          "\($agent): unknown label \"\(.)\" in labels_include"
+        else empty end),
+
+       # labels_exclude values in labels (if present)
+       (if .labels_exclude != null and (.labels_exclude | type == "array") then
+          .labels_exclude[] | select(. as $l | $labels | index($l) | not) |
+          "\($agent): unknown label \"\(.)\" in labels_exclude"
+        else empty end),
+
+       # description_condition known enum
+       (if .description_condition != null then
+          .description_condition |
+          select(. != "empty_or_todo_or_label_needs_planning" and . != "not_empty_and_not_todo") |
+          "\($agent): unknown description_condition \"\(.)\""
+        else empty end),
+
+       # order_by known enum
+       (if .order_by != null then
+          .order_by |
+          select(. != "priority_desc" and . != "created_desc" and . != "updated_desc") |
+          "\($agent): unknown order_by \"\(.)\""
+        else empty end)
+      );
+    check
+  ' "$routing_json" 2>/dev/null)
+
+  if [[ -n "$errors" ]]; then
+    ralph_error "Routing schema errors in $routing_json:"
+    echo "$errors" | while IFS= read -r line; do
+      ralph_error "  $line"
+    done
+    exit 1
+  fi
+}
+
+# ─── Unified Query Builder ───────────────────────────────────────────────────
+
+# ralph_rules_to_dsl <agent>
+# Reads routing.json rules for the given agent and emits a canonical DSL string.
+# Tokens: assignee:me state:X,Y !state:X,Y label:X !label:X !description:empty !blocked
+# Providers with native query languages (Jira/JQL) keep their own provider_rules_to_query.
+# Providers using DSL (linear, github-issues, github-projects, file) delegate here.
+ralph_rules_to_dsl() {
+  local agent="$1"
+  local routing_json
+  routing_json="$(ralph_get_routing_json)"
+  local rules
+  rules=$(jq -c ".agents.${agent}.rules" "$routing_json")
+
+  local parts=()
+
+  # status_in — check if negative form is shorter
+  local all_statuses status_in_count
+  all_statuses=$(jq -r '.statuses | length' "$routing_json")
+  status_in_count=$(echo "$rules" | jq -r '.status_in | length')
+
+  if (( status_in_count == all_statuses )); then
+    : # all statuses — no filter needed
+  elif (( all_statuses - status_in_count < status_in_count )); then
+    # Negative form is shorter — compute excluded statuses
+    local excluded
+    excluded=$(jq -r --argjson inc "$(echo "$rules" | jq '.status_in')" \
+      '[.statuses[] | select(. as $s | $inc | index($s) | not)] | map(gsub(" "; "+")) | join(",")' "$routing_json")
+    parts+=("!status:$excluded")
+  else
+    local included
+    included=$(echo "$rules" | jq -r '.status_in | map(gsub(" "; "+")) | join(",")')
+    parts+=("status:$included")
+  fi
+
+  # labels_include
+  local labels_include
+  labels_include=$(echo "$rules" | jq -r '.labels_include // null')
+  if [[ "$labels_include" != "null" ]]; then
+    local inc_list
+    inc_list=$(echo "$rules" | jq -r '.labels_include | join(",")')
+    parts+=("label:$inc_list")
+  fi
+
+  # labels_exclude
+  local labels_exclude
+  labels_exclude=$(echo "$rules" | jq -r '.labels_exclude // null')
+  if [[ "$labels_exclude" != "null" ]]; then
+    local exc_list
+    exc_list=$(echo "$rules" | jq -r '.labels_exclude | join(",")')
+    parts+=("!label:$exc_list")
+  fi
+
+  # description_condition
+  local desc_cond
+  desc_cond=$(echo "$rules" | jq -r '.description_condition // "null"')
+  case "$desc_cond" in
+    not_empty_and_not_todo) parts+=('!description:empty') ;;
+  esac
+
+  # exclude_blocked
+  local exclude_blocked
+  exclude_blocked=$(echo "$rules" | jq -r '.exclude_blocked // false')
+  if [[ "$exclude_blocked" == "true" ]]; then
+    parts+=('!blocked')
+  fi
+
+  echo "${parts[*]}"
 }
 
 # ─── Queries ──────────────────────────────────────────────────────────────────
@@ -334,36 +250,6 @@ ralph_get_query() {
   # Generate query from rules via the provider's rules_to_query function.
   # The provider must be sourced before calling this (see ralph-gated-loop.sh).
   provider_rules_to_query "$agent"
-}
-
-
-# ─── Session Logs ────────────────────────────────────────────────────────
-
-# ralph_extract_task_key <file>
-# Scans stream-json output for a task key (e.g. PROD-42). Returns first match or empty.
-ralph_extract_task_key() {
-  local file="$1"
-  [[ ! -f "$file" ]] && return
-  jq -r '.text // empty' "$file" 2>/dev/null | grep -oE '[A-Z][A-Z0-9]+-[0-9]+|#[0-9]+' | head -1
-}
-
-# ralph_save_session_log <session_log> <agent_key> <instance_num> [task_key]
-# Copies session log to persistent log dir on exit. No-op if RALPH_LOG_DIR is unset.
-ralph_save_session_log() {
-  [[ -z "$RALPH_LOG_DIR" ]] && return
-  local session_log="$1" agent_key="$2" instance_num="$3" task_key="$4"
-  [[ ! -f "$session_log" ]] && return
-  [[ ! -s "$session_log" ]] && return  # skip empty logs (idle polls)
-
-  local log_dir="${RALPH_LOG_DIR%/}/${agent_key}-${instance_num}"
-  mkdir -p "$log_dir"
-
-  local timestamp
-  timestamp=$(date '+%Y-%m-%dT%H:%M:%S')
-  local suffix="${task_key:+-$task_key}"
-  local log_path="$log_dir/${timestamp}${suffix}.log"
-  cp "$session_log" "$log_path"
-  ralph_log "Session log: $log_path"
 }
 
 # ─── Config ───────────────────────────────────────────────────────────────────
@@ -386,50 +272,4 @@ ralph_cooldown() {
     [[ $shutdown -eq 1 ]] && return 1
     remaining=$((remaining - 1))
   done
-}
-
-# ─── Title Bar ───────────────────────────────────────────────────────────────
-
-_ralph_titlebar_text=""
-_ralph_titlebar_active=0
-
-ralph_titlebar_init() {
-  local rows
-  rows=$(tput lines)
-  _ralph_titlebar_active=1
-  # Clear screen, move to 1;1, set scroll region 2–bottom, position at line 2
-  printf '\033[2J\033[1;1H\033[2K\033[2;%sr\033[2;1H' "$rows" >/dev/tty
-  trap 'ralph_titlebar_resize' WINCH
-}
-
-ralph_titlebar_resize() {
-  local rows cols
-  rows=$(tput lines)
-  cols=$(tput cols)
-  # Update scroll region to new size
-  printf '\033[s\033[2;%sr' "$rows" >/dev/tty
-  # Redraw the title if we have one
-  if [[ -n "$_ralph_titlebar_text" ]]; then
-    local text="${_ralph_titlebar_text[1,$cols]}"
-    printf '\033[1;1H\033[2K\033[7m%-*s\033[0m' "$cols" "$text" >/dev/tty
-  fi
-  printf '\033[u' >/dev/tty
-  trap 'ralph_titlebar_resize' WINCH
-}
-
-ralph_titlebar_update() {
-  local text="$1" cols
-  _ralph_titlebar_text="$text"
-  cols=$(tput cols)
-  text="${text[1,$cols]}"
-  # Save cursor, move to 1;1, write full-width inverse bar, restore cursor
-  printf '\033[s\033[1;1H\033[2K\033[7m%-*s\033[0m\033[u' "$cols" "$text" >/dev/tty
-}
-
-ralph_titlebar_cleanup() {
-  [[ $_ralph_titlebar_active -eq 0 ]] && return
-  _ralph_titlebar_text=""
-  _ralph_titlebar_active=0
-  # Reset scroll region to full screen, clear the title bar line
-  printf '\033[r\033[1;1H\033[2K' >/dev/tty
 }

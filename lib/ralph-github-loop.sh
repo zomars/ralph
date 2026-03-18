@@ -1,56 +1,17 @@
 #!/bin/zsh
-# ralph-github-loop.sh — GitHub PR-gated AFK loop
+# ralph-github-loop.sh — GitHub PR-gated AFK loop (thin wrapper over ralph-loop.sh)
 #
 # Usage: source this file, then call ralph_github_loop <agent_key> <agent_name>
-# Unlike ralph-gated-loop.sh, this does NOT use a Jira provider.
+# Unlike ralph-gated-loop.sh, this does NOT use a backlog provider.
 # It gates on GitHub PRs needing attention.
 
-# ─── Agent-specific dispatch helpers ─────────────────────────────────────────
-
-ralph_github_fetch_for_agent() {
-  case "$1" in
-    fixer)  ralph_fetch_fixer_prs ;;
-    merger) ralph_fetch_mergeable_prs ;;
-    *)      ralph_fetch_fixer_prs ;;
-  esac
-}
-
-ralph_github_initial_message() {
-  local agent_key="$1" instance_num="$2" work_dir="$3" project_dir="$4" target_pr="$5"
-  local worktree_context=""
-  if [[ -n "${RALPH_WORKTREE_CONTEXT:-}" ]]; then
-    worktree_context="
-Worktree setup output (use this for ports, domains, and dev environment details):
-$RALPH_WORKTREE_CONTEXT"
-  fi
-  case "$agent_key" in
-    fixer)
-      echo "You are RALPH_FIXER, instance $instance_num. Your worktree is: $work_dir (project root: $project_dir). Fix this PR now:
-$target_pr
-Start with Step 1 — checkout the branch and assess what needs fixing.${worktree_context}"
-      ;;
-    merger)
-      echo "You are RALPH_MERGER, instance $instance_num. Merge this PR now (squash + delete-branch):
-$target_pr
-Start with Step 1 — verify merge conditions."
-      ;;
-  esac
-}
-
-ralph_github_no_work_label() {
-  case "$1" in
-    fixer)  echo "fixes" ;;
-    merger) echo "merges" ;;
-    *)      echo "work" ;;
-  esac
-}
+source "$RALPH_HOME/lib/ralph-loop.sh"
 
 # ─── PR fetch functions ──────────────────────────────────────────────────────
 
 ralph_fetch_fixer_prs() {
   # Fetch PRs with unresolved review threads (catches both human and bot feedback).
   # Returns a JSON array of {number, title, url, headRefName} for PRs needing fixes.
-  # Scoped to the current repo via gh's default repo detection.
   local repo
   repo=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null) || repo=""
   if [[ -z "$repo" ]]; then
@@ -58,9 +19,6 @@ ralph_fetch_fixer_prs() {
     return
   fi
 
-  # Single GraphQL query: selects PRs with unresolved threads, merge conflicts,
-  # or CHANGES_REQUESTED reviews newer than the latest commit (stale reviews are
-  # skipped — GitHub never clears CHANGES_REQUESTED when threads are resolved).
   local graphql_prs
   graphql_prs=$(gh api graphql -f query="
     {
@@ -105,9 +63,6 @@ ralph_fetch_fixer_prs() {
 ralph_fetch_github_prs() { ralph_fetch_fixer_prs; }
 
 ralph_fetch_mergeable_prs() {
-  # Fetch PRs labeled for merge that pass all conditions:
-  # authored by @me, mergeable (no conflicts), CI fully green.
-  # Skips PRs where any check is still running (avoids race with newly-triggered CI).
   local repo label
   repo=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null) || repo=""
   if [[ -z "$repo" ]]; then
@@ -167,224 +122,118 @@ ralph_check_github_prs() {
   ralph_fetch_fixer_prs | jq 'length'
 }
 
+# ─── Agent-specific dispatch helpers ─────────────────────────────────────────
+
+_ralph_github_fetch_for_agent() {
+  case "$1" in
+    fixer)  ralph_fetch_fixer_prs ;;
+    merger) ralph_fetch_mergeable_prs ;;
+    *)      ralph_fetch_fixer_prs ;;
+  esac
+}
+
+_ralph_github_initial_message() {
+  local agent_key="$1" instance_num="$2" work_dir="$3" project_dir="$4" target_pr="$5"
+  local worktree_context=""
+  if [[ -n "${RALPH_WORKTREE_CONTEXT:-}" ]]; then
+    worktree_context="
+Worktree setup output (use this for ports, domains, and dev environment details):
+$RALPH_WORKTREE_CONTEXT"
+  fi
+  case "$agent_key" in
+    fixer)
+      echo "You are RALPH_FIXER, instance $instance_num. Your worktree is: $work_dir (project root: $project_dir). Fix this PR now:
+$target_pr
+Start with Step 1 — checkout the branch and assess what needs fixing.${worktree_context}"
+      ;;
+    merger)
+      echo "You are RALPH_MERGER, instance $instance_num. Merge this PR now (squash + delete-branch):
+$target_pr
+Start with Step 1 — verify merge conditions."
+      ;;
+  esac
+}
+
+_ralph_github_no_work_label() {
+  case "$1" in
+    fixer)  echo "fixes" ;;
+    merger) echo "merges" ;;
+    *)      echo "work" ;;
+  esac
+}
+
+# ─── Loop entry points ───────────────────────────────────────────────────────
+
 ralph_github_loop_once() {
   ralph_github_loop "$1" "$2" 1
 }
 
 ralph_github_loop() {
-  local agent_key="$1"
-  local agent_name="$2"
-  local max_iterations="${3:-0}"  # 0 = unlimited
+  local _agent_key="$1"
+  local _agent_name="$2"
+  local _max_iterations="${3:-0}"
 
-  # ─── Init ─────────────────────────────────────────────────────────────────
-  source "$RALPH_HOME/lib/ralph-core.sh"
-  ralph_init
+  # ─── Callbacks ──────────────────────────────────────────────────────────
 
-  # Validate gh CLI is available
-  if ! command -v gh &>/dev/null; then
-    ralph_error "gh CLI is not installed. Install it: https://cli.github.com/"
-    exit 1
-  fi
-  if ! gh auth status &>/dev/null; then
-    ralph_error "gh CLI is not authenticated. Run: gh auth login"
-    exit 1
-  fi
-
-  # ─── Instance slot ────────────────────────────────────────────────────────
-  source "$RALPH_HOME/lib/ralph-gated-loop.sh"
-  local instance_num instance_slot
-  instance_num=$(ralph_claim_instance "$agent_key")
-  instance_slot="/tmp/ralph-${agent_key}/${instance_num}"
-
-  # ─── Session log ────────────────────────────────────────────────────────
-  local session_log="$instance_slot/session.log"
-
-  # ─── Worktree (only for agents that modify code) ───────────────────────
-  local project_dir="$PWD"
-  local work_dir uses_worktree=false
-  case "$agent_key" in
-    fixer|merger)
-      ralph_setup_worktree "$agent_key" "$instance_num"
-      work_dir="$RALPH_WORKTREE_DIR"
-      uses_worktree=true
-      ;;
-    *)
-      work_dir="$PWD"
-      ;;
-  esac
-
-  # Resolve paths
-  local prompt_file poll_interval provider_instructions=""
-  prompt_file="$(ralph_get_prompt "$agent_key")"
-  poll_interval="$(ralph_get_poll_interval)"
-
-  # Load provider instructions for agents that need Jira access (e.g. merger)
-  case "$agent_key" in
-    merger)
-      source "$RALPH_HOME/lib/providers/${RALPH_PROVIDER}.sh"
-      provider_instructions="$(ralph_get_provider_instructions)"
-      ;;
-  esac
-
-  if [[ ! -f "$prompt_file" ]]; then
-    ralph_error "Prompt not found: $prompt_file"
-    exit 1
-  fi
-
-  # ─── jq filters ─────────────────────────────────────────────────────────
-  ralph_get_jq_filters
-  local stream_text="$RALPH_STREAM_FILTER"
-  local final_result="$RALPH_RESULT_FILTER"
-
-  # ─── State ──────────────────────────────────────────────────────────────
-  local iteration=0
-  local tmpfile=""
-  local child_pid=""
-  local shutdown=0
-  local consecutive_empty=0
-  local max_consecutive_empty="${RALPH_MAX_EMPTY_ITERATIONS:-5}"
-  local no_work_label
-  no_work_label=$(ralph_github_no_work_label "$agent_key")
-
-  trap 'shutdown=1; [[ -n "$child_pid" ]] && kill -INT -$child_pid 2>/dev/null' INT TERM HUP
-  local last_task_key=""
-  trap 'ralph_save_session_log "$session_log" "$agent_key" "$instance_num" "$last_task_key"; ralph_titlebar_cleanup; rm -f "$tmpfile" 2>/dev/null; rm -rf "$instance_slot" 2>/dev/null; [[ "$uses_worktree" == "true" ]] && ralph_cleanup_worktree "$work_dir"; [[ -n "$child_pid" ]] && kill -9 -$child_pid 2>/dev/null' EXIT
-
-  die() {
-    ralph_save_session_log "$session_log" "$agent_key" "$instance_num" "$last_task_key"
-    ralph_titlebar_cleanup
-    printf "\nShutting down.\n"
-    rm -f "$tmpfile" 2>/dev/null
-    tmpfile=""
-    rm -rf "$instance_slot" 2>/dev/null
-    [[ "$uses_worktree" == "true" ]] && ralph_cleanup_worktree "$work_dir"
-    [[ -n "$child_pid" ]] && kill -9 -$child_pid 2>/dev/null
-    exit 1
-  }
-
-  # ─── Early exit for bounded runs with no work (before titlebar clears screen)
-  if [[ "$max_iterations" -gt 0 ]]; then
-    local early_prs early_count
-    early_prs=$(ralph_github_fetch_for_agent "$agent_key")
-    early_count=$(echo "$early_prs" | jq 'length')
-    if [[ "$early_count" -lt "$instance_num" ]]; then
-      ralph_log "${agent_name} #$instance_num: No PRs needing $no_work_label ($early_count found). Nothing to do."
-      rm -rf "$instance_slot" 2>/dev/null
-      exit 0
+  loop_init() {
+    # Validate gh CLI
+    if ! command -v gh &>/dev/null; then
+      ralph_error "gh CLI is not installed. Install it: https://cli.github.com/"
+      exit 1
     fi
-  fi
-
-  ralph_titlebar_init
-
-  # ─── Main loop ──────────────────────────────────────────────────────────
-  while true; do
-    # Re-create worktree if it disappeared (e.g. cleaned by OS or another process)
-    if [[ "$uses_worktree" == "true" && ! -d "$work_dir" ]]; then
-      ralph_log "Worktree missing ($work_dir). Recreating..."
-      ralph_setup_worktree "$agent_key" "$instance_num"
-      work_dir="$RALPH_WORKTREE_DIR"
-    fi
-
-    local pr_json pr_count
-    pr_json=$(ralph_github_fetch_for_agent "$agent_key")
-    pr_count=$(echo "$pr_json" | jq 'length')
-
-    if [[ "$pr_count" -lt "$instance_num" ]]; then
-      if [[ "$max_iterations" -gt 0 ]]; then
-        ralph_log "${agent_name} #$instance_num: No PRs needing $no_work_label ($pr_count found). Nothing to do."
-        exit 0
-      fi
-      ralph_log "Not enough PRs for instance #$instance_num ($pr_count available). Sleeping ${poll_interval}s..."
-      ralph_cooldown "$poll_interval" "${(U)agent_name} #$instance_num | Waiting" || die
-      continue
-    fi
-
-    # Pick the PR for this instance (1-indexed instance, 0-indexed array)
-    local target_pr
-    target_pr=$(echo "$pr_json" | jq ".[$((instance_num - 1))]")
-
-    iteration=$((iteration + 1))
-    tmpfile=$(mktemp)
-
-    ralph_titlebar_update "${(U)agent_name} #$instance_num | Iteration $iteration | PRs: $pr_count | $(date '+%H:%M:%S')"
-    echo "------- ${(U)agent_name} #$instance_num ITERATION $iteration ($pr_count PRs) --------"
-
-    # Write iteration marker to session log
-    echo '{"type":"_ralph_marker","iteration":'$iteration',"timestamp":"'$(date -Iseconds)'","prs":'$pr_count'}' >> "$session_log"
-
-    local initial_message
-    initial_message=$(ralph_github_initial_message "$agent_key" "$instance_num" "$work_dir" "$project_dir" "$target_pr")
-
-    local max_iteration_seconds="${RALPH_MAX_ITERATION_SECONDS:-1800}"
-
-    # Write Claude output to a file (not a pipe) — see ralph-gated-loop.sh
-    # for explanation of the fd inheritance problem with pipes.
-    local raw_output=$(mktemp)
-
-    setopt MONITOR
-    {
-      ralph_exec_llm "$agent_key" "$instance_num" "$work_dir" "$prompt_file" "$provider_instructions" "$initial_message" \
-        </dev/null >"$raw_output" &
-    } 2>/dev/null
-    child_pid=$!
-    unsetopt MONITOR
-
-    # Stream output for real-time display and session log
-    ( tail -f -n +1 "$raw_output" | grep --line-buffered '^{' \
-      | tee -a "$session_log" | jq --unbuffered -rj "$stream_text" ) &
-    local stream_pid=$!
-
-    # Watchdog: force-kill if Claude hangs after max_turns
-    local watchdog_pid=""
-    ( sleep "$max_iteration_seconds" && ralph_log "Iteration timeout (${max_iteration_seconds}s). Force-killing..." && kill -9 -$child_pid 2>/dev/null ) &
-    watchdog_pid=$!
-
-    wait $child_pid 2>/dev/null || true
-    kill $watchdog_pid 2>/dev/null; wait $watchdog_pid 2>/dev/null || true
-    kill $stream_pid 2>/dev/null; wait $stream_pid 2>/dev/null || true
-    watchdog_pid=""
-    [[ $shutdown -eq 1 ]] && die
-    kill -9 -$child_pid 2>/dev/null || true
-    child_pid=""
-
-    # Kill orphaned processes (dev servers, MCP servers) left in the worktree
-    ralph_cleanup_worktree_processes "$work_dir"
-
-    # Build tmpfile from complete output (stream may have lagged)
-    grep '^{' "$raw_output" > "$tmpfile" 2>/dev/null || true
-    rm -f "$raw_output"
-
-    local result
-    result=$(jq -r "$final_result" "$tmpfile" 2>/dev/null || true)
-    last_task_key=$(ralph_extract_task_key "$tmpfile")
-
-    # Detect empty iterations (Claude crashed or produced no output)
-    if [[ ! -s "$tmpfile" ]]; then
-      consecutive_empty=$((consecutive_empty + 1))
-      ralph_error "Empty output from Claude (consecutive: $consecutive_empty/$max_consecutive_empty)"
-      if (( consecutive_empty >= max_consecutive_empty )); then
-        ralph_error "Too many consecutive empty iterations. Aborting."
-        rm -f "$tmpfile"
-        exit 1
-      fi
-    else
-      consecutive_empty=0
-    fi
-
-    rm -f "$tmpfile"
-    tmpfile=""
-
-    if [[ "$result" == *"<promise>ABORT</promise>"* ]]; then
-      echo "Ralph ($agent_name) aborted at iteration $iteration."
+    if ! gh auth status &>/dev/null; then
+      ralph_error "gh CLI is not authenticated. Run: gh auth login"
       exit 1
     fi
 
-    if [[ "$max_iterations" -gt 0 && "$iteration" -ge "$max_iterations" ]]; then
-      ralph_log "Iteration complete. Exiting ($iteration/$max_iterations iterations)."
-      exit 0
-    fi
+    # Load provider for agents that need backlog access (e.g. merger)
+    case "$_agent_key" in
+      merger)
+        ralph_load_provider
+        ;;
+    esac
+  }
 
-    ralph_log "Iteration complete. Cooldown ${poll_interval}s..."
-    ralph_cooldown "$poll_interval" "${(U)agent_name} #$instance_num | Cooldown" || die
-  done
+  loop_uses_worktree() {
+    case "$_agent_key" in
+      fixer|merger) echo "true" ;;
+      *)            echo "false" ;;
+    esac
+  }
+
+  loop_no_work_label() {
+    _ralph_github_no_work_label "$_agent_key"
+  }
+
+  loop_fetch_work() {
+    _ralph_github_fetch_for_agent "$_agent_key" > "$LOOP_WORK_FILE"
+  }
+
+  loop_count_work() {
+    jq 'length' "$LOOP_WORK_FILE"
+  }
+
+  loop_pick_work() {
+    # Pick the PR for this instance (1-indexed instance, 0-indexed array)
+    LOOP_TASK_KEY=$(jq -r ".[$((instance_num - 1))].number // empty" "$LOOP_WORK_FILE")
+    [[ -z "$LOOP_TASK_KEY" ]] && return 1
+    local pr_count
+    pr_count=$(loop_count_work)
+    LOOP_TASK_DISPLAY="PRs: $pr_count"
+    return 0
+  }
+
+  loop_build_context() {
+    local target_pr
+    target_pr=$(jq ".[$((instance_num - 1))]" "$LOOP_WORK_FILE")
+    local provider_instructions=""
+    case "$_agent_key" in
+      merger) provider_instructions="$(ralph_get_provider_instructions)" ;;
+    esac
+    _ralph_github_initial_message "$_agent_key" "$instance_num" "$work_dir" "$project_dir" "$target_pr"
+  }
+
+  # ─── Run ────────────────────────────────────────────────────────────────
+
+  ralph_run_loop "$_agent_key" "$_agent_name" "$_max_iterations"
 }
