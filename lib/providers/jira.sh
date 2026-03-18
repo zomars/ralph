@@ -265,12 +265,9 @@ provider_rules_to_query() {
     parts+=("(labels is EMPTY OR labels not in ($exclude_list))")
   fi
 
-  # exclude_blocked
-  local exclude_blocked
-  exclude_blocked=$(echo "$rules" | jq -r '.exclude_blocked // false')
-  if [[ "$exclude_blocked" == "true" ]]; then
-    parts+=("issueKey not in linkedIssuesOf('status != \"Done\"', 'is blocked by')")
-  fi
+  # exclude_blocked — handled by shell-level provider_check_blockers in the gated loop.
+  # linkedIssuesOf() in JQL is a no-op for this use case (returns empty set regardless
+  # of direction name used), so we don't emit it.
 
   # Build the query
   local query=""
