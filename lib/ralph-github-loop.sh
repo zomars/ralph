@@ -168,13 +168,13 @@ ralph_check_github_prs() {
 }
 
 ralph_github_loop_once() {
-  ralph_github_loop "$1" "$2" "true"
+  ralph_github_loop "$1" "$2" 1
 }
 
 ralph_github_loop() {
   local agent_key="$1"
   local agent_name="$2"
-  local run_once="${3:-false}"
+  local max_iterations="${3:-0}"  # 0 = unlimited
 
   # ─── Init ─────────────────────────────────────────────────────────────────
   source "$RALPH_HOME/lib/ralph-core.sh"
@@ -262,8 +262,8 @@ ralph_github_loop() {
     exit 1
   }
 
-  # ─── Early exit for --once with no work (before titlebar clears screen) ─
-  if [[ "$run_once" == "true" ]]; then
+  # ─── Early exit for bounded runs with no work (before titlebar clears screen)
+  if [[ "$max_iterations" -gt 0 ]]; then
     local early_prs early_count
     early_prs=$(ralph_github_fetch_for_agent "$agent_key")
     early_count=$(echo "$early_prs" | jq 'length')
@@ -290,7 +290,7 @@ ralph_github_loop() {
     pr_count=$(echo "$pr_json" | jq 'length')
 
     if [[ "$pr_count" -lt "$instance_num" ]]; then
-      if [[ "$run_once" == "true" ]]; then
+      if [[ "$max_iterations" -gt 0 ]]; then
         ralph_log "${agent_name} #$instance_num: No PRs needing $no_work_label ($pr_count found). Nothing to do."
         exit 0
       fi
@@ -379,8 +379,8 @@ ralph_github_loop() {
       exit 1
     fi
 
-    if [[ "$run_once" == "true" ]]; then
-      ralph_log "Iteration complete. Exiting (--once mode)."
+    if [[ "$max_iterations" -gt 0 && "$iteration" -ge "$max_iterations" ]]; then
+      ralph_log "Iteration complete. Exiting ($iteration/$max_iterations iterations)."
       exit 0
     fi
 

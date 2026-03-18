@@ -25,13 +25,13 @@ ralph_claim_instance() {
 }
 
 ralph_gated_loop_once() {
-  ralph_gated_loop "$1" "$2" "true"
+  ralph_gated_loop "$1" "$2" 1
 }
 
 ralph_gated_loop() {
   local agent_key="$1"
   local agent_name="$2"
-  local run_once="${3:-false}"
+  local max_iterations="${3:-0}"  # 0 = unlimited
 
   # ─── Init ─────────────────────────────────────────────────────────────────
   source "$RALPH_HOME/lib/ralph-core.sh"
@@ -100,8 +100,8 @@ ralph_gated_loop() {
     exit 1
   }
 
-  # ─── Early exit for --once with no work (before titlebar clears screen) ─
-  if [[ "$run_once" == "true" ]]; then
+  # ─── Early exit for bounded runs with no work (before titlebar clears screen)
+  if [[ "$max_iterations" -gt 0 ]]; then
     local early_count
     early_count=$(provider_check_tasks "$query")
     if [[ "$early_count" -lt "$instance_num" ]]; then
@@ -126,7 +126,7 @@ ralph_gated_loop() {
     task_count=$(provider_check_tasks "$query")
 
     if [[ "$task_count" -lt "$instance_num" ]]; then
-      if [[ "$run_once" == "true" ]]; then
+      if [[ "$max_iterations" -gt 0 ]]; then
         ralph_log "${agent_name} #$instance_num: No tasks available ($task_count found). Nothing to do."
         exit 0
       fi
@@ -226,8 +226,8 @@ Execute your workflow now. Start with Step 1.${worktree_context}"
       exit 1
     fi
 
-    if [[ "$run_once" == "true" ]]; then
-      ralph_log "Iteration complete. Exiting (--once mode)."
+    if [[ "$max_iterations" -gt 0 && "$iteration" -ge "$max_iterations" ]]; then
+      ralph_log "Iteration complete. Exiting ($iteration/$max_iterations iterations)."
       exit 0
     fi
 

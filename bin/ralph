@@ -26,7 +26,8 @@ GitHub commands:
   merger            Run the Merger agent (auto-merges approved PRs)
 
 Agent options:
-  --once            Run a single iteration, then exit
+  <N>               Run exactly N iterations, then exit (e.g. ralph planner 10)
+  --once            Run a single iteration, then exit (shorthand for 1)
   --afk             Run in AFK loop mode (default)
 
 Debugging:
@@ -189,27 +190,23 @@ cmd_agent() {
   local agent_name
   agent_name=$(agent_display_name "$agent_key")
 
-  # Parse --once / --afk
-  local run_once="false"
+  # Parse --once / --afk / <N>
+  local max_iterations=0  # 0 = unlimited (AFK mode)
   for arg in "$@"; do
     case "$arg" in
-      --once) run_once="true" ;;
-      --afk)  run_once="false" ;;
+      --once) max_iterations=1 ;;
+      --afk)  max_iterations=0 ;;
+      [0-9]*) max_iterations="$arg" ;;
       *)
         echo "Unknown option for '$agent_key': $arg"
-        echo "Usage: ralph $agent_key [--once|--afk]"
+        echo "Usage: ralph $agent_key [--once|--afk|<N>]"
         exit 1
         ;;
     esac
   done
 
   source "$RALPH_HOME/lib/ralph-gated-loop.sh"
-
-  if [[ "$run_once" == "true" ]]; then
-    ralph_gated_loop_once "$agent_key" "$agent_name"
-  else
-    ralph_gated_loop "$agent_key" "$agent_name"
-  fi
+  ralph_gated_loop "$agent_key" "$agent_name" "$max_iterations"
 }
 
 cmd_github_agent() {
@@ -218,27 +215,23 @@ cmd_github_agent() {
   local agent_name
   agent_name=$(agent_display_name "$agent_key")
 
-  # Parse --once / --afk
-  local run_once="false"
+  # Parse --once / --afk / <N>
+  local max_iterations=0  # 0 = unlimited (AFK mode)
   for arg in "$@"; do
     case "$arg" in
-      --once) run_once="true" ;;
-      --afk)  run_once="false" ;;
+      --once) max_iterations=1 ;;
+      --afk)  max_iterations=0 ;;
+      [0-9]*) max_iterations="$arg" ;;
       *)
         echo "Unknown option for '$agent_key': $arg"
-        echo "Usage: ralph $agent_key [--once|--afk]"
+        echo "Usage: ralph $agent_key [--once|--afk|<N>]"
         exit 1
         ;;
     esac
   done
 
   source "$RALPH_HOME/lib/ralph-github-loop.sh"
-
-  if [[ "$run_once" == "true" ]]; then
-    ralph_github_loop_once "$agent_key" "$agent_name"
-  else
-    ralph_github_loop "$agent_key" "$agent_name"
-  fi
+  ralph_github_loop "$agent_key" "$agent_name" "$max_iterations"
 }
 
 cmd_debug() {
