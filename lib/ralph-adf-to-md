@@ -1,0 +1,26 @@
+#!/usr/bin/env node
+// ADF (Atlassian Document Format) → Markdown converter
+//
+// Single mode: echo '{"type":"doc",...}' | ralph-adf-to-md
+// Batch mode:  echo '[{...},{...}]' | ralph-adf-to-md --batch
+//   Outputs JSON array of markdown strings: ["md1","md2"]
+import pkg from 'adf-to-md';
+const { convert } = pkg;
+
+const batch = process.argv.includes('--batch');
+let input = '';
+process.stdin.on('data', d => input += d);
+process.stdin.on('end', () => {
+  const parsed = JSON.parse(input);
+  if (batch) {
+    const results = parsed.map(adf => {
+      if (!adf || adf === null) return '';
+      if (!adf.version) adf.version = 1;
+      try { return convert(adf).result; } catch { return '(conversion failed)'; }
+    });
+    process.stdout.write(JSON.stringify(results));
+  } else {
+    if (!parsed.version) parsed.version = 1;
+    process.stdout.write(convert(parsed).result);
+  }
+});

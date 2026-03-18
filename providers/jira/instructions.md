@@ -4,10 +4,13 @@ You are connected to Jira as the backlog provider. Use the following tools and c
 
 **CRITICAL: Use ONLY `mcp__jira__*` tools (the local Jira server). NEVER use `mcp__claude_ai_jira__*` tools — those hit Anthropic's proxy which is rate-limited. Do NOT call `ToolSearch` for Jira tools — the exact tool names are listed below.**
 
+## Task Context
+
+Your assigned task is pre-loaded in the KB directory (path in initial message). Read KB files for your assigned task. All task context you need is in the KB — do NOT query Jira for task details.
+
 ## Tools
 
-- **Search tasks**: `mcp__jira__searchJiraIssuesUsingJql` — pass JQL string and set `maxResults=1`
-- **Get task details**: `mcp__jira__getJiraIssue` — fetch full issue by key
+- **Do NOT use**: `mcp__jira__searchJiraIssuesUsingJql`, `mcp__jira__getJiraIssue` — task context is in the KB. These waste turns and tokens.
 - **Edit task**: `mcp__jira__editJiraIssue` — update fields (description, labels)
 - **Add comment**: `mcp__jira__addCommentToJiraIssue`
 - **Get transitions**: `mcp__jira__getTransitionsForJiraIssue` — always discover available transitions before transitioning

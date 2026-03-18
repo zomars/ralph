@@ -170,6 +170,37 @@ GQL
   echo "$response" | jq "$jq_filter"
 }
 
+# Fetch full task data (stub)
+provider_fetch_tasks() {
+  local query="$1"
+  local max_results="${2:-10}"
+  ralph_error "provider_fetch_tasks not fully implemented for github-projects"
+  echo '{"issues":[]}'
+  return 1
+}
+
+# No native blocking — always unblocked
+provider_check_blockers() { return 0; }
+
+# Stub KB writer
+provider_write_kb() {
+  local issue_json="$1"
+  local kb_dir="$2"
+  echo "(GitHub Projects KB not implemented — agent will query directly)" > "$kb_dir/task.md"
+  echo "" > "$kb_dir/description.md"
+  echo "" > "$kb_dir/comments.md"
+  echo "[]" > "$kb_dir/links.json"
+  echo "{}" > "$kb_dir/meta.json"
+}
+
+# Render issue data as inline markdown (stub)
+provider_render_kb() {
+  local issue_json="$1"
+  echo "# YOUR ASSIGNED TASK"
+  echo ""
+  echo "(Provider does not support inline KB rendering — agent will query directly)"
+}
+
 # Generate DSL query from rules in routing.json
 # Args: $1 = agent key
 # Returns: DSL string for provider_check_tasks()

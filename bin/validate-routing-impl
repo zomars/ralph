@@ -225,7 +225,7 @@ check_prompts() {
   echo "Checking that prompts do not contain hardcoded queries..."
   echo ""
 
-  # Prompts should reference "the query provided in the initial message" instead
+  # Prompts should reference "Task KB" (pre-loaded context) instead
   # of embedding provider-specific queries like JQL or DSL strings.
   local hardcoded_patterns=(
     'assignee = currentUser()'
@@ -260,13 +260,13 @@ check_prompts() {
       fi
     done
 
-    # Check that prompt references the initial message query
-    if grep -q "query provided in the initial message" "$full_prompt_path"; then
+    # Check that prompt references KB-based task loading
+    if grep -q "Task KB" "$full_prompt_path"; then
       if [ "$found_hardcoded" -eq 0 ]; then
         echo "  $agent: OK"
       fi
     else
-      echo "  $agent: WARN — prompt does not reference 'query provided in the initial message'"
+      echo "  $agent: WARN — prompt does not reference 'Task KB'"
     fi
   done
 

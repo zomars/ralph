@@ -98,6 +98,39 @@ provider_check_tasks() {
   echo "$result" | jq 'length'
 }
 
+# Fetch full task data (stub — returns minimal structure for gated-loop)
+provider_fetch_tasks() {
+  local query="$1"
+  local max_results="${2:-10}"
+  # Re-use check logic but return issue numbers as minimal structure
+  # GitHub Issues provider relies on Claude using gh CLI directly
+  ralph_error "provider_fetch_tasks not fully implemented for github-issues"
+  echo '{"issues":[]}'
+  return 1
+}
+
+# No native blocking in GitHub Issues — always unblocked
+provider_check_blockers() { return 0; }
+
+# Stub KB writer for GitHub Issues
+provider_write_kb() {
+  local issue_json="$1"
+  local kb_dir="$2"
+  echo "(GitHub Issues KB not implemented — agent will query directly)" > "$kb_dir/task.md"
+  echo "" > "$kb_dir/description.md"
+  echo "" > "$kb_dir/comments.md"
+  echo "[]" > "$kb_dir/links.json"
+  echo "{}" > "$kb_dir/meta.json"
+}
+
+# Render issue data as inline markdown (stub)
+provider_render_kb() {
+  local issue_json="$1"
+  echo "# YOUR ASSIGNED TASK"
+  echo ""
+  echo "(Provider does not support inline KB rendering — agent will query directly)"
+}
+
 # Generate DSL query from rules in routing.json
 # Args: $1 = agent key
 # Returns: DSL string for provider_check_tasks()

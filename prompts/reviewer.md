@@ -11,23 +11,16 @@
 
 ## 1. Load Context
 
-1. Find assigned review tasks using the backlog search tool with the query provided in the initial message.
-   - **IMPORTANT**: Set `maxResults=1` to avoid reading too much data.
-2. Read last 10 RALPH commits.
+Your assigned task (key, description, comments) is in the initial message above — do NOT query the backlog for it.
 
-## 2. Pick A SINGLE Task
+1. Read the task context in the initial message
+2. Read last 10 RALPH commits
 
-From the query results (already sorted by priority):
+## 2. Understand Task
 
-1. Pick the first issue.
-2. If NO issues returned by query → `<promise>COMPLETE</promise>` (all assigned work is done).
-
-Fetch the chosen issue's full details using the backlog task detail tool.
-
-**CRITICAL**: Check the `comment` field in the issue details.
-
-- If there are recent comments from humans (or other agents), **READ THEM CAREFULLY**.
-- New instructions in comments override the original description.
+The task has been pre-selected and dependency-validated by the guard. The initial message contains `YOUR ASSIGNED TASK: <TASK-KEY>`.
+- **You MUST work on THIS task and ONLY this task.** Do not search for, pick, or switch to other tasks.
+- If NO task was provided → `<promise>COMPLETE</promise>`
 
 ## 3. Review the Task
 

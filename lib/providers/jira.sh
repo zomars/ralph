@@ -12,25 +12,208 @@ PROVIDER_ENV_VARS=(JIRA_EMAIL JIRA_API_TOKEN JIRA_BASE_URL)
 PROVIDER_MCP_NAME=jira
 PROVIDER_MCP_CMD=ralph-jira-mcp
 
-# Check if tasks exist for the given query
-# Args: $1 = JQL query string
-# Returns: task count (0 = no tasks)
-provider_check_tasks() {
+# Fetch full task data for the given query
+# Args: $1 = JQL query string, $2 = max results (default 10)
+# Returns: raw JSON response from Jira search API
+provider_fetch_tasks() {
   local query="$1"
+  local max_results="${2:-10}"
   local body
-  body=$(jq -n --arg jql "$query" '{"jql":$jql,"maxResults":10,"fields":["summary"]}')
+  body=$(jq -n --arg jql "$query" --argjson max "$max_results" \
+    '{"jql":$jql,"maxResults":$max,"fields":["summary","status","labels","priority","issuelinks","comment","parent","attachment","description","created","updated"]}')
   local response
   if ! response=$(curl -s --fail-with-body -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
     -H "Content-Type: application/json" \
     -X POST \
     -d "$body" \
     "$JIRA_BASE_URL/rest/api/3/search/jql" 2>&1); then
-    ralph_error "Provider check failed: $response"
-    echo "0"
-    return 0
+    ralph_error "Provider fetch failed: $response"
+    echo '{"issues":[]}'
+    return 1
+  fi
+  echo "$response"
+}
+
+# Check if tasks exist for the given query
+# Args: $1 = JQL query string
+# Returns: task count (0 = no tasks)
+provider_check_tasks() {
+  local query="$1"
+  local response
+  response=$(provider_fetch_tasks "$query" 10)
+  echo "$response" | jq '.issues | length'
+}
+
+# Check if an issue has unfinished blockers
+# Args: $1 = single issue JSON object
+# Returns: 0 if no blockers (safe to work), 1 if blocked
+provider_check_blockers() {
+  local issue_json="$1"
+  local blocked_count
+  # In Jira's link model, when type.inward == "is blocked by":
+  #   inwardIssue = the issue that blocks us (our blocker)
+  #   outwardIssue = the issue we block
+  blocked_count=$(echo "$issue_json" | jq '[
+    .fields.issuelinks[]?
+    | select(.type.inward == "is blocked by" and .inwardIssue)
+    | select(.inwardIssue.fields.status.statusCategory.key != "done")
+  ] | length')
+  [[ "$blocked_count" -eq 0 ]]
+}
+
+# Write issue data to KB directory
+# Args: $1 = single issue JSON object, $2 = KB directory path
+provider_write_kb() {
+  local issue_json="$1"
+  local kb_dir="$2"
+
+  # task.md — key, summary, status, priority, labels, parent
+  local task_key task_summary task_status task_priority task_labels task_parent
+  task_key=$(echo "$issue_json" | jq -r '.key')
+  task_summary=$(echo "$issue_json" | jq -r '.fields.summary')
+  task_status=$(echo "$issue_json" | jq -r '.fields.status.name')
+  task_priority=$(echo "$issue_json" | jq -r '.fields.priority.name // "None"')
+  task_labels=$(echo "$issue_json" | jq -r '[.fields.labels[]? | if type == "object" then .name else . end] | join(", ")')
+  task_parent=$(echo "$issue_json" | jq -r '.fields.parent.key // "None"')
+
+  cat > "$kb_dir/task.md" <<EOF
+# $task_key: $task_summary
+
+- **Status**: $task_status
+- **Priority**: $task_priority
+- **Labels**: $task_labels
+- **Parent**: $task_parent
+EOF
+
+  # Batch-convert all ADF bodies (description + comments) in one Node call
+  local comments_count
+  comments_count=$(echo "$issue_json" | jq '.fields.comment.comments | length')
+
+  # Build array: [description_adf, comment0_adf, comment1_adf, ...]
+  # Pipe through Node once, write result to temp file to avoid shell mangling
+  local batch_file="$kb_dir/_batch.json"
+  echo "$issue_json" | jq '[.fields.description] + [.fields.comment.comments[]?.body]' \
+    | ralph-adf-to-md --batch > "$batch_file" 2>/dev/null || echo '[]' > "$batch_file"
+
+  # description.md — first element
+  jq -r '.[0] // "(no description)"' "$batch_file" > "$kb_dir/description.md"
+
+  # comments.md — remaining elements, merged with metadata via jq
+  if [[ "$comments_count" -gt 0 ]]; then
+    echo "$issue_json" | jq -r --slurpfile bodies "$batch_file" '
+      [.fields.comment.comments | to_entries[] | {
+        author: .value.author.displayName,
+        date: (.value.created | split("T")[0]),
+        body: ($bodies[0][.key + 1] // "(conversion failed)")
+      }] | .[] | "### \(.author) (\(.date))\n\n\(.body)\n\n---\n"
+    ' > "$kb_dir/comments.md"
+  else
+    echo "(no comments)" > "$kb_dir/comments.md"
+  fi
+  rm -f "$batch_file"
+
+  # links.json — [{type, direction, key, summary, status, statusCategory}]
+  echo "$issue_json" | jq '[
+    .fields.issuelinks[]? | (
+      if .outwardIssue then
+        {type: .type.name, direction: "outward", inward_desc: .type.inward, outward_desc: .type.outward,
+         key: .outwardIssue.key, summary: .outwardIssue.fields.summary,
+         status: .outwardIssue.fields.status.name,
+         statusCategory: .outwardIssue.fields.status.statusCategory.key}
+      elif .inwardIssue then
+        {type: .type.name, direction: "inward", inward_desc: .type.inward, outward_desc: .type.outward,
+         key: .inwardIssue.key, summary: .inwardIssue.fields.summary,
+         status: .inwardIssue.fields.status.name,
+         statusCategory: .inwardIssue.fields.status.statusCategory.key}
+      else empty end
+    )
+  ]' > "$kb_dir/links.json"
+
+  # meta.json — machine-readable metadata
+  echo "$issue_json" | jq '{
+    key: .key,
+    status: .fields.status.name,
+    statusCategory: .fields.status.statusCategory.key,
+    priority: .fields.priority.name,
+    labels: [.fields.labels[]? | if type == "object" then .name else . end],
+    parent_key: (.fields.parent.key // null),
+    created: .fields.created,
+    updated: .fields.updated
+  }' > "$kb_dir/meta.json"
+}
+
+# Render issue data as inline markdown for the initial message
+# Args: $1 = single issue JSON object
+# Returns: markdown string to stdout
+provider_render_kb() {
+  local issue_json="$1"
+
+  local task_key task_summary task_status task_priority task_labels task_parent
+  task_key=$(echo "$issue_json" | jq -r '.key')
+  task_summary=$(echo "$issue_json" | jq -r '.fields.summary')
+  task_status=$(echo "$issue_json" | jq -r '.fields.status.name')
+  task_priority=$(echo "$issue_json" | jq -r '.fields.priority.name // "None"')
+  task_labels=$(echo "$issue_json" | jq -r '[.fields.labels[]? | if type == "object" then .name else . end] | join(", ")')
+  task_parent=$(echo "$issue_json" | jq -r '.fields.parent.key // "None"')
+
+  # Batch-convert all ADF (description + comments) in one Node call
+  local batch_file
+  batch_file=$(mktemp)
+  echo "$issue_json" | jq '[.fields.description] + [.fields.comment.comments[]?.body]' \
+    | ralph-adf-to-md --batch > "$batch_file" 2>/dev/null || echo '[]' > "$batch_file"
+
+  local desc_md
+  desc_md=$(jq -r '.[0] // "(no description)"' "$batch_file")
+
+  local comments_md=""
+  local comments_count
+  comments_count=$(echo "$issue_json" | jq '.fields.comment.comments | length')
+  if [[ "$comments_count" -gt 0 ]]; then
+    comments_md=$(echo "$issue_json" | jq -r --slurpfile bodies "$batch_file" '
+      [.fields.comment.comments | to_entries[] | {
+        author: .value.author.displayName,
+        date: (.value.created | split("T")[0]),
+        body: ($bodies[0][.key + 1] // "(conversion failed)")
+      }] | .[] | "### \(.author) (\(.date))\n\n\(.body)\n\n---"
+    ')
+  fi
+  rm -f "$batch_file"
+
+  # Blocker branches for stacked PRs
+  local blockers_md=""
+  local blocker_keys
+  blocker_keys=$(echo "$issue_json" | jq -r '
+    [.fields.issuelinks[]?
+     | select(.type.inward == "is blocked by" and .inwardIssue)
+     | .inwardIssue.key] | join(" ")
+  ')
+  if [[ -n "$blocker_keys" ]]; then
+    blockers_md="
+## Blocker Keys (for stacked PR branch setup)
+$blocker_keys"
   fi
 
-  echo "$response" | jq '.issues | length'
+  cat <<EOF
+# YOUR ASSIGNED TASK: $task_key
+
+**$task_summary**
+
+| Field | Value |
+|-------|-------|
+| Status | $task_status |
+| Priority | $task_priority |
+| Labels | $task_labels |
+| Parent | $task_parent |
+
+## Description
+
+$desc_md
+
+## Comments
+
+${comments_md:-(no comments)}
+${blockers_md}
+EOF
 }
 
 # Generate JQL from rules in routing.json

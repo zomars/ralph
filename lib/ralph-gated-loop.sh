@@ -95,15 +95,18 @@ ralph_gated_loop() {
     rm -f "$tmpfile" 2>/dev/null
     tmpfile=""
     rm -rf "$instance_slot" 2>/dev/null
+    rm -rf "/tmp/ralph-kb/${agent_key}-${instance_num}" 2>/dev/null
     ralph_cleanup_worktree "$work_dir"
     [[ -n "$child_pid" ]] && kill -9 -$child_pid 2>/dev/null
     exit 1
   }
 
   # ─── Early exit for bounded runs with no work (before titlebar clears screen)
+  local prefetched_tasks=""
   if [[ "$max_iterations" -gt 0 ]]; then
+    prefetched_tasks=$(provider_fetch_tasks "$query" 10)
     local early_count
-    early_count=$(provider_check_tasks "$query")
+    early_count=$(echo "$prefetched_tasks" | jq '.issues | length')
     if [[ "$early_count" -lt "$instance_num" ]]; then
       ralph_log "${agent_name} #$instance_num: No tasks available ($early_count found). Nothing to do."
       rm -rf "$instance_slot" 2>/dev/null
@@ -122,8 +125,15 @@ ralph_gated_loop() {
       work_dir="$RALPH_WORKTREE_DIR"
     fi
 
-    local task_count
-    task_count=$(provider_check_tasks "$query")
+    # Fetch full task data (reuse prefetch on first iteration)
+    local tasks_json task_count
+    if [[ -n "$prefetched_tasks" ]]; then
+      tasks_json="$prefetched_tasks"
+      prefetched_tasks=""
+    else
+      tasks_json=$(provider_fetch_tasks "$query" 10)
+    fi
+    task_count=$(echo "$tasks_json" | jq '.issues | length')
 
     if [[ "$task_count" -lt "$instance_num" ]]; then
       if [[ "$max_iterations" -gt 0 ]]; then
@@ -135,14 +145,31 @@ ralph_gated_loop() {
       continue
     fi
 
+    # Pick task for this instance
+    local task_json task_key
+    task_json=$(echo "$tasks_json" | jq ".issues[$((instance_num - 1))]")
+    task_key=$(echo "$task_json" | jq -r '.key')
+
+    # Safety net: blocker check (should not fire if query is correct)
+    if ! provider_check_blockers "$task_json"; then
+      ralph_log "WARNING: Task $task_key has unfinished blockers (query should have excluded it). Skipping."
+      ralph_cooldown "$poll_interval" "${(U)agent_name} #$instance_num | Blocked" || die
+      continue
+    fi
+
+    # Build KB as inline markdown
+    local task_kb
+    task_kb=$(provider_render_kb "$task_json")
+    last_task_key="$task_key"
+
     iteration=$((iteration + 1))
     tmpfile=$(mktemp)
 
-    ralph_titlebar_update "${(U)agent_name} #$instance_num | Iteration $iteration | Tasks: $task_count | $(date '+%H:%M:%S')"
-    echo "------- ${(U)agent_name} #$instance_num ITERATION $iteration ($task_count tasks) --------"
+    ralph_titlebar_update "${(U)agent_name} #$instance_num | Iteration $iteration | Task: $task_key | $(date '+%H:%M:%S')"
+    echo "------- ${(U)agent_name} #$instance_num ITERATION $iteration (Task: $task_key) --------"
 
     # Write iteration marker to session log
-    echo '{"type":"_ralph_marker","iteration":'$iteration',"timestamp":"'$(date -Iseconds)'","tasks":'$task_count'}' >> "$session_log"
+    echo '{"type":"_ralph_marker","iteration":'$iteration',"timestamp":"'$(date -Iseconds)'","task":"'$task_key'"}' >> "$session_log"
 
     local initial_message worktree_context=""
     if [[ -n "${RALPH_WORKTREE_CONTEXT:-}" ]]; then
@@ -151,7 +178,9 @@ Worktree setup output (use this for ports, domains, and dev environment details)
 $RALPH_WORKTREE_CONTEXT"
     fi
     initial_message="You are RALPH_${(U)agent_key}, instance $instance_num. Your worktree is: $work_dir (project root: $project_dir).
-Search query: $query
+
+$task_kb
+
 Execute your workflow now. Start with Step 1.${worktree_context}"
 
     local max_iteration_seconds="${RALPH_MAX_ITERATION_SECONDS:-1800}"

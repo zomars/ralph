@@ -11,29 +11,17 @@
 
 ## 1. Load Context
 
-1. Find assigned tasks using the backlog search tool with the query provided in the initial message.
-   **IMPORTANT**: Set `maxResults` to your instance number (from the user message, e.g. "instance 2" → `maxResults=2`). Default to `maxResults=1` if no instance number is given.
-2. Read last 10 RALPH commits.
+Your assigned task (key, description, comments, blocker keys) is in the initial message above — do NOT query the backlog for it.
 
-## 2. Pick A SINGLE Task
+1. Read the task context in the initial message
+2. Read last 10 RALPH commits
 
-From the query results (already sorted by priority):
+## 2. Understand Task
 
-1. If fewer results were returned than your instance number → `<promise>COMPLETE</promise>` (another instance is handling the remaining tasks)
-2. Pick the **last** result returned (e.g. instance 2 picks result #2, instance 1 picks result #1)
-3. Any issue with status "In Progress" → verify/continue it
-4. Otherwise → implement it
-5. If NO issues returned by query → `<promise>COMPLETE</promise>` (all assigned work is done)
-
-Fetch the chosen issue's full details using the backlog task detail tool.
-
-**CRITICAL — Dependency gate**: Check `fields.issuelinks` for any link where `type.inward == "is blocked by"` AND there is an `outwardIssue` (the blocker). If ANY blocker's `status.statusCategory.key` is NOT `"done"`, this task has unfinished prerequisites. **Skip it** — do NOT work on it. Instead, output `<promise>COMPLETE</promise>` (the blocker must be completed first).
-
-**CRITICAL**: Check the `comment` field in the issue details.
-
-- If there are recent comments from reviewers or other agents, **READ THEM CAREFULLY**.
-- Comments may contain rejection feedback, change requests, or new instructions that override the original description.
-- If a reviewer sent the task back, address their feedback before doing anything else.
+The task has been pre-selected and dependency-validated by the guard. The initial message contains `YOUR ASSIGNED TASK: <TASK-KEY>`.
+- **You MUST implement THIS task and ONLY this task.** Do not search for, pick, or switch to other tasks.
+- If status is "In Progress" → verify/continue existing work
+- Otherwise → start fresh
 
 ### Branch Setup
 
@@ -50,8 +38,7 @@ else
   # Determine base branch: check for stacked PR dependency
   BASE_BRANCH="$DEFAULT_BRANCH"
   # Look at issue links for "is blocked by" relationships
-  # In the fetched issue details, check fields.issuelinks for inward links
-  # where type.inward == "is blocked by"
+  # Check "Blocker Keys" section in the initial message
   # For each blocker key, check if ralph/<BLOCKER-KEY> exists on remote
   # If it does → that's our base branch (stacked PR)
   # If multiple blockers have remote branches, use the first one found
