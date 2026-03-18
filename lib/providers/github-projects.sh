@@ -183,8 +183,9 @@ provider_fetch_tasks() {
 provider_check_blockers() { return 0; }
 
 # Stub KB writer
+# Args: $1 = path to JSON file (normalized format), $2 = KB directory path
 provider_write_kb() {
-  local issue_json="$1"
+  local issue_file="$1"
   local kb_dir="$2"
   echo "(GitHub Projects KB not implemented — agent will query directly)" > "$kb_dir/task.md"
   echo "" > "$kb_dir/description.md"
@@ -194,8 +195,9 @@ provider_write_kb() {
 }
 
 # Render issue data as inline markdown (stub)
+# Args: $1 = path to JSON file (normalized format)
 provider_render_kb() {
-  local issue_json="$1"
+  local issue_file="$1"
   echo "# YOUR ASSIGNED TASK"
   echo ""
   echo "(Provider does not support inline KB rendering — agent will query directly)"

@@ -85,32 +85,32 @@ provider_check_tasks() {
 }
 
 # Check if an issue has unfinished blockers
-# Args: $1 = single issue JSON (normalized format)
+# Args: $1 = path to JSON file (normalized format)
 # Returns: 0 if no blockers, 1 if blocked
 provider_check_blockers() {
-  local issue_json="$1"
+  local issue_file="$1"
   local blocked_count
-  blocked_count=$(echo "$issue_json" | jq '[
+  blocked_count=$(jq '[
     .fields.issuelinks[]?
     | select(.type.inward == "is blocked by")
     | select(.outwardIssue.fields.status.statusCategory.key != "done")
-  ] | length')
+  ] | length' "$issue_file")
   [[ "$blocked_count" -eq 0 ]]
 }
 
 # Write issue data to KB directory
-# Args: $1 = single issue JSON (normalized format), $2 = KB directory path
+# Args: $1 = path to JSON file (normalized format), $2 = KB directory path
 provider_write_kb() {
-  local issue_json="$1"
+  local issue_file="$1"
   local kb_dir="$2"
 
   local task_key task_summary task_status task_priority task_labels task_parent
-  task_key=$(echo "$issue_json" | jq -r '.key')
-  task_summary=$(echo "$issue_json" | jq -r '.fields.summary')
-  task_status=$(echo "$issue_json" | jq -r '.fields.status.name')
-  task_priority=$(echo "$issue_json" | jq -r '.fields.priority.name // "None"')
-  task_labels=$(echo "$issue_json" | jq -r '[.fields.labels[]?.name] | join(", ")')
-  task_parent=$(echo "$issue_json" | jq -r '.fields.parent.key // "None"')
+  task_key=$(jq -r '.key' "$issue_file")
+  task_summary=$(jq -r '.fields.summary' "$issue_file")
+  task_status=$(jq -r '.fields.status.name' "$issue_file")
+  task_priority=$(jq -r '.fields.priority.name // "None"' "$issue_file")
+  task_labels=$(jq -r '[.fields.labels[]?.name] | join(", ")' "$issue_file")
+  task_parent=$(jq -r '.fields.parent.key // "None"' "$issue_file")
 
   cat > "$kb_dir/task.md" <<EOF
 # $task_key: $task_summary
@@ -123,22 +123,22 @@ EOF
 
   # Linear descriptions are markdown already
   local desc
-  desc=$(echo "$issue_json" | jq -r '.fields.description // "(no description)"')
+  desc=$(jq -r '.fields.description // "(no description)"' "$issue_file")
   echo "$desc" > "$kb_dir/description.md"
 
   # comments.md
   local comments_count
-  comments_count=$(echo "$issue_json" | jq '.fields.comment.comments | length')
+  comments_count=$(jq '.fields.comment.comments | length' "$issue_file")
   if [[ "$comments_count" -gt 0 ]]; then
-    echo "$issue_json" | jq -r '.fields.comment.comments[] |
+    jq -r '.fields.comment.comments[] |
       "### \(.author.displayName) (\(.created | split("T")[0]))\n\n\(.body)\n\n---\n"
-    ' > "$kb_dir/comments.md"
+    ' "$issue_file" > "$kb_dir/comments.md"
   else
     echo "(no comments)" > "$kb_dir/comments.md"
   fi
 
   # links.json
-  echo "$issue_json" | jq '[
+  jq '[
     .fields.issuelinks[]? | {
       type: .type.name,
       direction: "outward",
@@ -148,10 +148,10 @@ EOF
       status: .outwardIssue.fields.status.name,
       statusCategory: .outwardIssue.fields.status.statusCategory.key
     }
-  ]' > "$kb_dir/links.json"
+  ]' "$issue_file" > "$kb_dir/links.json"
 
   # meta.json
-  echo "$issue_json" | jq '{
+  jq '{
     key: .key,
     status: .fields.status.name,
     statusCategory: .fields.status.statusCategory.key,
@@ -160,42 +160,42 @@ EOF
     parent_key: (.fields.parent.key // null),
     created: .fields.created,
     updated: .fields.updated
-  }' > "$kb_dir/meta.json"
+  }' "$issue_file" > "$kb_dir/meta.json"
 }
 
 # Render issue data as inline markdown for the initial message
-# Args: $1 = single issue JSON (normalized format)
+# Args: $1 = path to JSON file (normalized format)
 # Returns: markdown string to stdout
 provider_render_kb() {
-  local issue_json="$1"
+  local issue_file="$1"
 
   local task_key task_summary task_status task_priority task_labels task_parent
-  task_key=$(echo "$issue_json" | jq -r '.key')
-  task_summary=$(echo "$issue_json" | jq -r '.fields.summary')
-  task_status=$(echo "$issue_json" | jq -r '.fields.status.name')
-  task_priority=$(echo "$issue_json" | jq -r '.fields.priority.name // "None"')
-  task_labels=$(echo "$issue_json" | jq -r '[.fields.labels[]?.name] | join(", ")')
-  task_parent=$(echo "$issue_json" | jq -r '.fields.parent.key // "None"')
+  task_key=$(jq -r '.key' "$issue_file")
+  task_summary=$(jq -r '.fields.summary' "$issue_file")
+  task_status=$(jq -r '.fields.status.name' "$issue_file")
+  task_priority=$(jq -r '.fields.priority.name // "None"' "$issue_file")
+  task_labels=$(jq -r '[.fields.labels[]?.name] | join(", ")' "$issue_file")
+  task_parent=$(jq -r '.fields.parent.key // "None"' "$issue_file")
 
   local desc_md
-  desc_md=$(echo "$issue_json" | jq -r '.fields.description // "(no description)"')
+  desc_md=$(jq -r '.fields.description // "(no description)"' "$issue_file")
 
   local comments_md=""
   local comments_count
-  comments_count=$(echo "$issue_json" | jq '.fields.comment.comments | length')
+  comments_count=$(jq '.fields.comment.comments | length' "$issue_file")
   if [[ "$comments_count" -gt 0 ]]; then
-    comments_md=$(echo "$issue_json" | jq -r '
+    comments_md=$(jq -r '
       .fields.comment.comments[] |
       "### \(.author.displayName) (\(.created | split("T")[0]))\n\n\(.body)\n\n---"
-    ')
+    ' "$issue_file")
   fi
 
   local blocker_keys
-  blocker_keys=$(echo "$issue_json" | jq -r '
+  blocker_keys=$(jq -r '
     [.fields.issuelinks[]?
      | select(.type.inward == "is blocked by")
      | .outwardIssue.key] | join(" ")
-  ')
+  ' "$issue_file")
   local blockers_md=""
   if [[ -n "$blocker_keys" ]]; then
     blockers_md="

@@ -86,27 +86,31 @@ ralph_gated_loop() {
 
   trap 'shutdown=1; [[ -n "$child_pid" ]] && kill -INT -$child_pid 2>/dev/null' INT TERM HUP
   local last_task_key=""
-  trap 'ralph_save_session_log "$session_log" "$agent_key" "$instance_num" "$last_task_key"; ralph_titlebar_cleanup; rm -f "$tmpfile" 2>/dev/null; rm -rf "$instance_slot" 2>/dev/null; ralph_cleanup_worktree "$work_dir"; [[ -n "$child_pid" ]] && kill -9 -$child_pid 2>/dev/null' EXIT
 
   die() {
     ralph_save_session_log "$session_log" "$agent_key" "$instance_num" "$last_task_key"
     ralph_titlebar_cleanup
     printf "\nShutting down.\n"
-    rm -f "$tmpfile" 2>/dev/null
+    rm -f "$tmpfile" "$tasks_file" "$task_file" 2>/dev/null
     tmpfile=""
     rm -rf "$instance_slot" 2>/dev/null
-    rm -rf "/tmp/ralph-kb/${agent_key}-${instance_num}" 2>/dev/null
     ralph_cleanup_worktree "$work_dir"
     [[ -n "$child_pid" ]] && kill -9 -$child_pid 2>/dev/null
     exit 1
   }
 
+  # Temp files for JSON data flow (avoids zsh variable mangling of control chars)
+  local tasks_file="/tmp/ralph-${agent_key}-${instance_num}-tasks.json"
+  local task_file="/tmp/ralph-${agent_key}-${instance_num}-task.json"
+  trap 'ralph_save_session_log "$session_log" "$agent_key" "$instance_num" "$last_task_key"; ralph_titlebar_cleanup; rm -f "$tmpfile" "$tasks_file" "$task_file" 2>/dev/null; rm -rf "$instance_slot" 2>/dev/null; ralph_cleanup_worktree "$work_dir"; [[ -n "$child_pid" ]] && kill -9 -$child_pid 2>/dev/null' EXIT
+
   # ─── Early exit for bounded runs with no work (before titlebar clears screen)
-  local prefetched_tasks=""
+  local has_prefetch=0
   if [[ "$max_iterations" -gt 0 ]]; then
-    prefetched_tasks=$(provider_fetch_tasks "$query" 10)
+    provider_fetch_tasks "$query" 10 > "$tasks_file"
+    has_prefetch=1
     local early_count
-    early_count=$(echo "$prefetched_tasks" | jq '.issues | length')
+    early_count=$(jq '.issues | length' "$tasks_file")
     if [[ "$early_count" -lt "$instance_num" ]]; then
       ralph_log "${agent_name} #$instance_num: No tasks available ($early_count found). Nothing to do."
       rm -rf "$instance_slot" 2>/dev/null
@@ -126,14 +130,13 @@ ralph_gated_loop() {
     fi
 
     # Fetch full task data (reuse prefetch on first iteration)
-    local tasks_json task_count
-    if [[ -n "$prefetched_tasks" ]]; then
-      tasks_json="$prefetched_tasks"
-      prefetched_tasks=""
+    if [[ "$has_prefetch" -eq 1 ]]; then
+      has_prefetch=0
     else
-      tasks_json=$(provider_fetch_tasks "$query" 10)
+      provider_fetch_tasks "$query" 10 > "$tasks_file"
     fi
-    task_count=$(echo "$tasks_json" | jq '.issues | length')
+    local task_count
+    task_count=$(jq '.issues | length' "$tasks_file")
 
     if [[ "$task_count" -lt "$instance_num" ]]; then
       if [[ "$max_iterations" -gt 0 ]]; then
@@ -146,19 +149,17 @@ ralph_gated_loop() {
     fi
 
     # Pick the Nth unblocked task for this instance
-    local task_json="" task_key="" unblocked_seen=0 pick_idx=0
+    local task_key="" unblocked_seen=0 pick_idx=0
     while (( pick_idx < task_count )); do
-      local candidate
-      candidate=$(echo "$tasks_json" | jq ".issues[$pick_idx]")
-      if provider_check_blockers "$candidate"; then
+      jq ".issues[$pick_idx]" "$tasks_file" > "$task_file"
+      if provider_check_blockers "$task_file"; then
         unblocked_seen=$((unblocked_seen + 1))
         if (( unblocked_seen == instance_num )); then
-          task_json="$candidate"
-          task_key=$(echo "$task_json" | jq -r '.key')
+          task_key=$(jq -r '.key' "$task_file")
           break
         fi
       else
-        ralph_log "Skipping $(echo "$candidate" | jq -r '.key') (blocked)"
+        ralph_log "Skipping $(jq -r '.key' "$task_file") (blocked)"
       fi
       pick_idx=$((pick_idx + 1))
     done
@@ -175,7 +176,7 @@ ralph_gated_loop() {
 
     # Build KB as inline markdown
     local task_kb
-    task_kb=$(provider_render_kb "$task_json")
+    task_kb=$(provider_render_kb "$task_file")
     last_task_key="$task_key"
 
     iteration=$((iteration + 1))

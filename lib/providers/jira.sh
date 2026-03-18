@@ -45,19 +45,19 @@ provider_check_tasks() {
 }
 
 # Check if an issue has unfinished blockers
-# Args: $1 = single issue JSON object
+# Args: $1 = path to JSON file containing single issue object
 # Returns: 0 if no blockers (safe to work), 1 if blocked
 provider_check_blockers() {
-  local issue_json="$1"
+  local issue_file="$1"
   local blocked_count
   # In Jira's link model, when type.inward == "is blocked by":
   #   inwardIssue = the issue that blocks us (our blocker)
   #   outwardIssue = the issue we block
-  blocked_count=$(echo "$issue_json" | jq '[
+  blocked_count=$(jq '[
     .fields.issuelinks[]?
     | select(.type.inward == "is blocked by" and .inwardIssue)
     | select(.inwardIssue.fields.status.statusCategory.key != "done")
-  ] | length')
+  ] | length' "$issue_file")
   [[ "$blocked_count" -eq 0 ]]
 }
 
@@ -143,23 +143,23 @@ EOF
 }
 
 # Render issue data as inline markdown for the initial message
-# Args: $1 = single issue JSON object
+# Args: $1 = path to JSON file containing single issue object
 # Returns: markdown string to stdout
 provider_render_kb() {
-  local issue_json="$1"
+  local issue_file="$1"
 
   local task_key task_summary task_status task_priority task_labels task_parent
-  task_key=$(echo "$issue_json" | jq -r '.key')
-  task_summary=$(echo "$issue_json" | jq -r '.fields.summary')
-  task_status=$(echo "$issue_json" | jq -r '.fields.status.name')
-  task_priority=$(echo "$issue_json" | jq -r '.fields.priority.name // "None"')
-  task_labels=$(echo "$issue_json" | jq -r '[.fields.labels[]? | if type == "object" then .name else . end] | join(", ")')
-  task_parent=$(echo "$issue_json" | jq -r '.fields.parent.key // "None"')
+  task_key=$(jq -r '.key' "$issue_file")
+  task_summary=$(jq -r '.fields.summary' "$issue_file")
+  task_status=$(jq -r '.fields.status.name' "$issue_file")
+  task_priority=$(jq -r '.fields.priority.name // "None"' "$issue_file")
+  task_labels=$(jq -r '[.fields.labels[]? | if type == "object" then .name else . end] | join(", ")' "$issue_file")
+  task_parent=$(jq -r '.fields.parent.key // "None"' "$issue_file")
 
   # Batch-convert all ADF (description + comments) in one Node call
   local batch_file
   batch_file=$(mktemp)
-  echo "$issue_json" | jq '[.fields.description] + [.fields.comment.comments[]?.body]' \
+  jq '[.fields.description] + [.fields.comment.comments[]?.body]' "$issue_file" \
     | ralph-adf-to-md --batch > "$batch_file" 2>/dev/null || echo '[]' > "$batch_file"
 
   local desc_md
@@ -167,26 +167,26 @@ provider_render_kb() {
 
   local comments_md=""
   local comments_count
-  comments_count=$(echo "$issue_json" | jq '.fields.comment.comments | length')
+  comments_count=$(jq '.fields.comment.comments | length' "$issue_file")
   if [[ "$comments_count" -gt 0 ]]; then
-    comments_md=$(echo "$issue_json" | jq -r --slurpfile bodies "$batch_file" '
+    comments_md=$(jq -r --slurpfile bodies "$batch_file" '
       [.fields.comment.comments | to_entries[] | {
         author: .value.author.displayName,
         date: (.value.created | split("T")[0]),
         body: ($bodies[0][.key + 1] // "(conversion failed)")
       }] | .[] | "### \(.author) (\(.date))\n\n\(.body)\n\n---"
-    ')
+    ' "$issue_file")
   fi
   rm -f "$batch_file"
 
   # Blocker branches for stacked PRs
   local blockers_md=""
   local blocker_keys
-  blocker_keys=$(echo "$issue_json" | jq -r '
+  blocker_keys=$(jq -r '
     [.fields.issuelinks[]?
      | select(.type.inward == "is blocked by" and .inwardIssue)
      | .inwardIssue.key] | join(" ")
-  ')
+  ' "$issue_file")
   if [[ -n "$blocker_keys" ]]; then
     blockers_md="
 ## Blocker Keys (for stacked PR branch setup)
