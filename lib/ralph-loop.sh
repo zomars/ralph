@@ -193,25 +193,23 @@ ralph_run_loop() {
     # (e.g. dev servers), the pipe never gets EOF and `wait` blocks forever.
     local raw_output=$(mktemp)
 
+    # Launch LLM and streaming pipeline under MONITOR so each gets its own
+    # process group (enabling kill -9 -$pid to reap entire pipelines).
+    # MONITOR stays on through wait so zsh can reap its own jobs.
     setopt MONITOR
     {
       ralph_exec_llm "$agent_key" "$instance_num" "$work_dir" "$prompt_file" "$provider_instructions" "$initial_message" \
         </dev/null >"$raw_output" &
     } 2>/dev/null
     child_pid=$!
-    unsetopt MONITOR
 
-    # Stream output for real-time display and session log.
-    # Launch in its own process group (MONITOR) so we can kill the entire pipeline,
-    # not just the subshell — prevents orphaned tail/grep/tee/jq processes.
+    # Stream output for real-time display and session log
     local stream_pid=""
-    setopt MONITOR
     {
       tail -f -n +1 "$raw_output" | grep --line-buffered '^{' \
         | tee -a "$session_log" | jq --unbuffered -rj "$stream_text" &
     } 2>/dev/null
     stream_pid=$!
-    unsetopt MONITOR
 
     # Watchdog: force-kill if Claude hangs after max_turns
     local watchdog_pid=""
@@ -220,9 +218,8 @@ ralph_run_loop() {
 
     wait $child_pid 2>/dev/null || true
     kill $watchdog_pid 2>/dev/null || true; wait $watchdog_pid 2>/dev/null || true
-    # Kill the streaming pipeline process group. Don't wait — the MONITOR-launched
-    # job group may not be waitable after unsetopt MONITOR, causing hangs.
     kill -9 -$stream_pid 2>/dev/null || true
+    unsetopt MONITOR
     watchdog_pid=""
     [[ $shutdown -eq 1 ]] && _loop_die
     kill -9 -$child_pid 2>/dev/null || true
