@@ -145,15 +145,31 @@ ralph_gated_loop() {
       continue
     fi
 
-    # Pick task for this instance
-    local task_json task_key
-    task_json=$(echo "$tasks_json" | jq ".issues[$((instance_num - 1))]")
-    task_key=$(echo "$task_json" | jq -r '.key')
+    # Pick the Nth unblocked task for this instance
+    local task_json="" task_key="" unblocked_seen=0 pick_idx=0
+    while (( pick_idx < task_count )); do
+      local candidate
+      candidate=$(echo "$tasks_json" | jq ".issues[$pick_idx]")
+      if provider_check_blockers "$candidate"; then
+        unblocked_seen=$((unblocked_seen + 1))
+        if (( unblocked_seen == instance_num )); then
+          task_json="$candidate"
+          task_key=$(echo "$task_json" | jq -r '.key')
+          break
+        fi
+      else
+        ralph_log "Skipping $(echo "$candidate" | jq -r '.key') (blocked)"
+      fi
+      pick_idx=$((pick_idx + 1))
+    done
 
-    # Safety net: blocker check (should not fire if query is correct)
-    if ! provider_check_blockers "$task_json"; then
-      ralph_log "WARNING: Task $task_key has unfinished blockers (query should have excluded it). Skipping."
-      ralph_cooldown "$poll_interval" "${(U)agent_name} #$instance_num | Blocked" || die
+    if [[ -z "$task_key" ]]; then
+      if [[ "$max_iterations" -gt 0 ]]; then
+        ralph_log "${agent_name} #$instance_num: No unblocked tasks for this instance. Nothing to do."
+        exit 0
+      fi
+      ralph_log "No unblocked tasks for instance #$instance_num. Sleeping ${poll_interval}s..."
+      ralph_cooldown "$poll_interval" "${(U)agent_name} #$instance_num | Waiting" || die
       continue
     fi
 
