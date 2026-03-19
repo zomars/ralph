@@ -41,7 +41,8 @@ The task has been pre-selected and dependency-validated by the guard. The initia
     - **Test Coverage**: Are there new tests for the new feature?
 5.  **Verify Testing Evidence**: Read the issue comments looking for a **test report from the Tester agent**.
     - A valid test report MUST include: numbered test steps, screenshots as evidence, and a PASS/FAIL result.
-    - If no test report exists, or the report lacks screenshots/evidence, the task is NOT ready for approval — route to Path B.
+    - **Evaluate evidence quality against the PRD**: Compare the test report against the ticket's acceptance criteria. Each acceptance criterion should have corresponding evidence (screenshot, API response, or measurable outcome). Generic "it works" screenshots without clear mapping to acceptance criteria are insufficient.
+    - If no test report exists, or the report lacks screenshots/evidence, or the evidence doesn't adequately cover the acceptance criteria — route to Path B.
 
 ## 4. Decide & Transition
 
@@ -55,40 +56,31 @@ Based on your analysis, choose ONE path:
   gh pr ready --undo "ralph/<TASK-KEY>"
   ```
 - **Transition**: Move status back to **"In Progress"**.
-- **Label**: (Optional) Add `ralph-failed` if it was a build error.
+- **Jira Label**: (Optional) If it was a build error, read current labels from the issue, append `ralph-failed`, and update via `editJiraIssue` with the full label list as `{"labels": [{"name": "label1"}, {"name": "label2"}]}`.
 
 ### Path B: NEEDS TESTING (No Evidence of Browser Testing)
 
-- **Action**: Comment explaining what's missing (e.g. "Code looks good but needs browser testing with evidence" or "Test report lacks screenshots").
+- **Action**: Comment with **specific testing guidance** for the Tester agent. The comment MUST include:
+  1. Which acceptance criteria lack evidence
+  2. What constitutes acceptable evidence for each (e.g. "Screenshot of upload returning 201 with file_path in response", "Screenshot showing radon alert triggered for reading > 4.0 pCi/L", "API response showing structured_data matches the extraction schema")
+  3. Any edge cases the tester should cover based on the PRD
 - **Re-draft PR**:
   ```bash
   gh pr ready --undo "ralph/<TASK-KEY>"
   ```
-- **Label**: Add `needs-tests`.
+- **Jira Label**: Read current labels from the issue, append `needs-tests`, and update via `editJiraIssue` with the full label list as `{"labels": [{"name": "label1"}, {"name": "needs-tests"}]}`.
 - **Transition**: Move status to **"To Do"**. (This hands off to the Tester Agent).
 
-### Path C: MESSY CODE (Functional but Ugly)
+### Path C: APPROVE (Good to Go)
 
-- **Action**: Comment "Functional, but needs refactoring."
-- **Label**: Add `tech-debt` label to the Jira issue.
-- **Label for merge**:
-  ```bash
-  gh label create ready-to-merge --description "Reviewer-approved, safe to merge" --color 0E8A16 --force
-  gh pr edit "ralph/<TASK-KEY>" --add-label "ready-to-merge"
-  ```
-- **Transition**: Keep status at **"In Review"** — the merger will move it to "Done" after merging.
-  - _Note_: If it's really bad, use Path A instead.
-
-### Path D: APPROVE (Good to Go)
-
-- **Precondition**: Tests pass, code is clean, AND a test report with screenshots exists in comments.
+- **Precondition**: Tests pass, code is clean, AND a test report with screenshots exists that adequately covers the ticket's acceptance criteria.
 - **Action**: Comment "Verified. Tests passed. Browser testing evidence confirmed. Code looks good."
-- **Label for merge**:
+- **Jira Label**: Read current labels from the issue, append `ready-to-merge`, and update via `editJiraIssue` with the full label list as `{"labels": [{"name": "label1"}, {"name": "ready-to-merge"}]}`. This prevents the reviewer from re-picking this task.
+- **PR Label for merge**:
   ```bash
   gh label create ready-to-merge --description "Reviewer-approved, safe to merge" --color 0E8A16 --force
   gh pr edit "ralph/<TASK-KEY>" --add-label "ready-to-merge"
   ```
-- **Label**: Add `ready-to-merge` label to the Jira issue (prevents reviewer from re-picking this task).
 - **Transition**: Keep status at **"In Review"** — the merger will move it to "Done" after merging.
 
 ## 5. Commit & Stop
