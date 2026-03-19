@@ -109,11 +109,14 @@ ralph_run_loop() {
     tmpfile=""
     rm -rf "$instance_slot" 2>/dev/null
     [[ "$uses_worktree" == "true" ]] && ralph_cleanup_worktree "$work_dir"
+    # Kill streaming pipeline by real PGID, then Claude
+    [[ -n "$stream_pgid" ]] && kill -9 -$stream_pgid 2>/dev/null || true
+    [[ -n "$stream_pid" ]] && kill -9 -$stream_pid 2>/dev/null || true
     [[ -n "$child_pid" ]] && kill -9 -$child_pid 2>/dev/null || true
     exit 1
   }
 
-  trap 'ralph_save_session_log "$session_log" "$agent_key" "$instance_num" "$last_task_key"; ralph_titlebar_cleanup; rm -f "$tmpfile" "$LOOP_WORK_FILE" 2>/dev/null; rm -rf "$instance_slot" 2>/dev/null; [[ "$uses_worktree" == "true" ]] && ralph_cleanup_worktree "$work_dir"; [[ -n "$child_pid" ]] && kill -9 -$child_pid 2>/dev/null || true' EXIT
+  trap 'ralph_save_session_log "$session_log" "$agent_key" "$instance_num" "$last_task_key"; ralph_titlebar_cleanup; rm -f "$tmpfile" "$LOOP_WORK_FILE" 2>/dev/null; rm -rf "$instance_slot" 2>/dev/null; [[ "$uses_worktree" == "true" ]] && ralph_cleanup_worktree "$work_dir"; [[ -n "$stream_pgid" ]] && kill -9 -$stream_pgid 2>/dev/null || true; [[ -n "$stream_pid" ]] && kill -9 -$stream_pid 2>/dev/null || true; [[ -n "$child_pid" ]] && kill -9 -$child_pid 2>/dev/null || true' EXIT
 
   # ─── Early exit for bounded runs with no work (before titlebar clears screen)
   local has_prefetch=0
@@ -205,11 +208,15 @@ ralph_run_loop() {
 
     # Stream output for real-time display and session log
     local stream_pid=""
+    local stream_pgid=""
     {
       tail -f -n +1 "$raw_output" | grep --line-buffered '^{' \
         | tee -a "$session_log" | jq --unbuffered -rj "$stream_text" &
     } 2>/dev/null
     stream_pid=$!
+    # In zsh MONITOR mode, $! is the last pipeline member (jq) but the PGID
+    # is the first member (tail). Resolve the real PGID for reliable cleanup.
+    stream_pgid=$(ps -o pgid= -p $stream_pid 2>/dev/null | tr -d ' ')
 
     # Watchdog: force-kill if Claude hangs after max_turns
     local watchdog_pid=""
@@ -218,6 +225,11 @@ ralph_run_loop() {
 
     wait $child_pid 2>/dev/null || true
     kill $watchdog_pid 2>/dev/null || true; wait $watchdog_pid 2>/dev/null || true
+    # Kill the entire streaming pipeline by its real PGID (not $stream_pid which
+    # is jq — the last member — and NOT the process group leader).
+    if [[ -n "$stream_pgid" ]]; then
+      kill -9 -$stream_pgid 2>/dev/null || true
+    fi
     kill -9 -$stream_pid 2>/dev/null || true
     unsetopt MONITOR
     watchdog_pid=""
