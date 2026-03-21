@@ -85,7 +85,7 @@ All work for this task happens on the `ralph/<TASK-KEY>` branch.
 | Telemetry/logging | Test or code showing events are captured |
 | Performance       | Benchmark or timing measurement          |
 
-Run the dev server if needed: `npm run dev --workspace=@frendor/consolidated-app`
+Run the dev server if needed (check the worktree setup output for the correct command).
 
 7. **Run full test suite**: Run `npm run test` before committing. If blocked by a genuine blocker (build failures, missing dependencies, failing tests):
    1. **Check for prior ABORTs**: Read the task comments. If there is already a `RALPH_IMPLEMENTER ABORT:` comment on this task, add label `ralph-failed` instead of `needs-planning` and add comment: `"RALPH_IMPLEMENTER: Failed twice, needs human attention."` Then output `<promise>ABORT</promise>`.

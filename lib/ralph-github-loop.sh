@@ -157,9 +157,16 @@ _ralph_github_initial_message() {
 Worktree setup output (use this for ports, domains, and dev environment details):
 $RALPH_WORKTREE_CONTEXT"
   fi
+  local default_branch
+  default_branch=$(git -C "$work_dir" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@') || default_branch=""
+  local branch_override=""
+  if [[ -n "$default_branch" ]]; then
+    branch_override="
+The repository default branch is \`$default_branch\` (NOT \`main\` unless that matches). Use \`origin/$default_branch\` when creating feature branches."
+  fi
   case "$agent_key" in
     fixer)
-      echo "You are RALPH_FIXER, instance $instance_num. Your worktree is: $work_dir (project root: $project_dir). Fix this PR now:
+      echo "You are RALPH_FIXER, instance $instance_num. Your worktree is: $work_dir (project root: $project_dir).${branch_override} Fix this PR now:
 $target_pr
 Start with Step 1 — checkout the branch and assess what needs fixing.${worktree_context}"
       ;;

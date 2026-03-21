@@ -66,7 +66,16 @@ ralph_gated_loop() {
 Worktree setup output (use this for ports, domains, and dev environment details):
 $RALPH_WORKTREE_CONTEXT"
     fi
-    echo "You are RALPH_${(U)_agent_key}, instance $instance_num. Your worktree is: $work_dir (project root: $project_dir).
+    # Detect the repo's actual default branch — claude --print injects its own
+    # "Main branch" heuristic which can be wrong (e.g. says "main" when it's "develop").
+    local default_branch
+    default_branch=$(git -C "$work_dir" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@') || default_branch=""
+    local branch_override=""
+    if [[ -n "$default_branch" ]]; then
+      branch_override="
+The repository default branch is \`$default_branch\` (NOT \`main\` unless that matches). Use \`origin/$default_branch\` when creating feature branches."
+    fi
+    echo "You are RALPH_${(U)_agent_key}, instance $instance_num. Your worktree is: $work_dir (project root: $project_dir).${branch_override}
 
 $task_kb
 
