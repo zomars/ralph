@@ -37,12 +37,14 @@ ralph_gated_loop() {
     # instance_num is set by ralph_run_loop in the parent scope (zsh dynamic scoping)
     local task_count
     task_count=$(loop_count_work)
+    local _exclude_blocked
+    _exclude_blocked=$(jq -r ".agents.${_agent_key}.rules.exclude_blocked // false" "$(ralph_get_routing_json)")
     local _blocker_check
     _blocker_check=$(jq -r ".agents.${_agent_key}.rules.blocker_check // \"done\"" "$(ralph_get_routing_json)")
     local unblocked_seen=0 pick_idx=0
     while (( pick_idx < task_count )); do
       jq ".issues[$pick_idx]" "$LOOP_WORK_FILE" > "$_task_file"
-      if provider_check_blockers "$_task_file" "$_blocker_check"; then
+      if [[ "$_exclude_blocked" != "true" ]] || provider_check_blockers "$_task_file" "$_blocker_check"; then
         unblocked_seen=$((unblocked_seen + 1))
         if (( unblocked_seen == instance_num )); then
           LOOP_TASK_KEY=$(jq -r '.key' "$_task_file")
