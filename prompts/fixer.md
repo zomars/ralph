@@ -125,7 +125,9 @@ Work through ALL unresolved feedback before moving to the next step.
    ```bash
    npm run test
    ```
-   If tests fail due to your changes, fix them. If blocked by a genuine blocker unrelated to your changes, output `<promise>ABORT</promise>`.
+   If tests fail due to your changes, fix them. If blocked by a genuine blocker unrelated to your changes:
+   1. **Check for prior ABORTs**: Read the PR comments. If there is already a `RALPH_FIXER ABORT:` comment on this PR, add label `ralph-failed` to the linked Jira task and add comment: `"RALPH_FIXER: Failed twice, needs human attention."` Then output `<promise>ABORT</promise>`.
+   2. **First ABORT**: Add label `needs-planning` to the linked Jira task. Add comment: `"RALPH_FIXER ABORT: <concrete reason with error messages>"`. Then output `<promise>ABORT</promise>`.
 
 2. **Commit** (only if changes were made beyond the merge commit — skip if only conflicts were resolved in Step 2):
    ```
@@ -137,11 +139,6 @@ Work through ALL unresolved feedback before moving to the next step.
 3. **Push:**
    ```bash
    git push origin <headRefName>
-   ```
-
-4. **Undraft PR** — mark it ready for review since fixes are pushed:
-   ```bash
-   gh pr ready <headRefName>
    ```
 
 ## 5. Reply & Resolve

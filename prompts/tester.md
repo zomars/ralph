@@ -39,7 +39,7 @@ The task has been pre-selected and dependency-validated by the guard. The initia
 
 ```bash
 git fetch origin
-git checkout "ralph/<TASK-KEY>"
+git checkout -f "ralph/<TASK-KEY>"
 git pull origin "ralph/<TASK-KEY>"
 git branch --show-current  # verify you're on the right branch
 ```
@@ -48,7 +48,7 @@ If a referenced file is missing, verify your current branch before searching git
 
 ### 3a. Start Dev Environment & Understand What to Test
 
-1. **Start the dev environment FIRST.** You run inside an isolated git worktree. If the initial message includes "Worktree setup output", follow it **exactly** — use the startup command and URLs it provides, not defaults. Worktrees use allocated ports to avoid conflicts between instances. If no worktree context is provided, read the root README or package.json to find the dev command, commit to one approach — do not cycle between strategies if the first attempt fails.
+1. **Start the dev environment.** You run inside an isolated git worktree. If the initial message includes "Worktree setup output", follow it **exactly** — use the startup command and URLs it provides, not defaults. Worktrees use allocated ports to avoid conflicts between instances. If no worktree context is provided, read the root README or package.json to find the dev command, commit to one approach — do not cycle between strategies if the first attempt fails.
    - **After switching branches** with a running dev server, wait for hot-reload to settle (use `browser_wait_for` with expected page content) or restart the dev server before resuming browser testing.
    - If the worktree setup mentions "Test data: seeded", trust it — don't create fixtures manually.
    - If test data is missing and you can't navigate the feature, ABORT — don't spend time building fixtures.
@@ -78,7 +78,8 @@ If the feature has **no browser surface** (pure backend, CLI utility, config cha
 - Skip directly to step 4 and mark it complete. You verified what you could.
 
 If blocked by a genuine blocker (app won't start, critical crash, missing environment):
-- Output `<promise>ABORT</promise>`.
+1. **Check for prior ABORTs**: Read the task comments. If there is already a `RALPH_TESTER ABORT:` comment on this task, add label `ralph-failed` instead of `needs-planning` and add comment: `"RALPH_TESTER: Failed twice, needs human attention."` Then output `<promise>ABORT</promise>`.
+2. **First ABORT**: Add label `needs-planning` to the task. Add comment: `"RALPH_TESTER ABORT: <concrete reason with error messages>"`. Then output `<promise>ABORT</promise>`.
 
 ## 4. Update Backlog
 
@@ -101,11 +102,7 @@ Always discover available transitions rather than hardcoding status names.
 
 ## 5. Release Branch & Stop
 
-You don't write code, so there's nothing to commit. Just undraft the PR and release the branch:
-
-```bash
-gh pr ready "ralph/<TASK-KEY>"
-```
+You don't write code, so there's nothing to commit. Just release the branch:
 
 **CRITICAL**: Before stopping, discard dev server artifacts and switch back to your workspace branch:
 

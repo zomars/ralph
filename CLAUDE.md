@@ -42,6 +42,10 @@ Each provider has 3 files:
 
 Adding a provider requires only these 3 files — no changes to core lib or bin wrappers.
 
+### PR Creation Flow
+
+PRs are created by the **reviewer**, not the implementer. This avoids wasting CI minutes on unapproved work — CI only runs on code the reviewer has approved. The implementer pushes branches (`ralph/<TASK-KEY>`); the reviewer, tester, and fixer check them out directly. The fixer agent activates only after the reviewer creates the PR, so it's naturally PR-gated.
+
 ### Agent Prompts (`prompts/*.md`)
 
 Provider-agnostic workflow instructions. Structure: RULES → WORKFLOW (Load Context → Pick Task → Do Work → Update Backlog → Commit & Stop). Each prompt embeds the query from routing.json.

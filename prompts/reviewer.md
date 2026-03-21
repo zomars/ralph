@@ -51,10 +51,6 @@ Based on your analysis, choose ONE path:
 ### Path A: REJECT (Logic/Tests Failed)
 
 - **Action**: Comment on the task explaining _exactly_ what failed.
-- **Re-draft PR**:
-  ```bash
-  gh pr ready --undo "ralph/<TASK-KEY>"
-  ```
 - **Transition**: Move status back to **"In Progress"**.
 - **Jira Label**: (Optional) If it was a build error, read current labels from the issue, append `ralph-failed`, and update via `editJiraIssue` with the full label list as `{"labels": [{"name": "label1"}, {"name": "label2"}]}`.
 
@@ -64,10 +60,6 @@ Based on your analysis, choose ONE path:
   1. Which acceptance criteria lack evidence
   2. What constitutes acceptable evidence for each (e.g. "Screenshot of upload returning 201 with file_path in response", "Screenshot showing radon alert triggered for reading > 4.0 pCi/L", "API response showing structured_data matches the extraction schema")
   3. Any edge cases the tester should cover based on the PRD
-- **Re-draft PR**:
-  ```bash
-  gh pr ready --undo "ralph/<TASK-KEY>"
-  ```
 - **Jira Label**: Read current labels from the issue, append `needs-tests`, and update via `editJiraIssue` with the full label list as `{"labels": [{"name": "label1"}, {"name": "needs-tests"}]}`.
 - **Transition**: Move status to **"To Do"**. (This hands off to the Tester Agent).
 
@@ -76,9 +68,12 @@ Based on your analysis, choose ONE path:
 - **Precondition**: Tests pass, code is clean, AND a test report with screenshots exists that adequately covers the ticket's acceptance criteria.
 - **Action**: Comment "Verified. Tests passed. Browser testing evidence confirmed. Code looks good."
 - **Jira Label**: Read current labels from the issue, append `ready-to-merge`, and update via `editJiraIssue` with the full label list as `{"labels": [{"name": "label1"}, {"name": "ready-to-merge"}]}`. This prevents the reviewer from re-picking this task.
-- **PR Label for merge**:
+- **Create PR and label**:
   ```bash
-  gh label create ready-to-merge --description "Reviewer-approved, safe to merge" --color 0E8A16 --force
+  DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')
+  gh pr create --base "$DEFAULT_BRANCH" --head "ralph/<TASK-KEY>" \
+    --title "<TASK-KEY>: <summary>" --body "Implements <TASK-KEY>"
+  gh label create ready-to-merge --description "Reviewer-approved" --color 0E8A16 --force
   gh pr edit "ralph/<TASK-KEY>" --add-label "ready-to-merge"
   ```
 - **Transition**: Keep status at **"In Review"** — the merger will move it to "Done" after merging.

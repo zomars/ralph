@@ -35,28 +35,9 @@ if git ls-remote --heads origin "ralph/<TASK-KEY>" | grep -q .; then
   git checkout "ralph/<TASK-KEY>"
   git pull origin "ralph/<TASK-KEY>"
 else
-  # Determine base branch: check for stacked PR dependency
-  BASE_BRANCH="$DEFAULT_BRANCH"
-  # Look at issue links for "is blocked by" relationships
-  # Check "Blocker Keys" section in the initial message
-  # For each blocker key, check if ralph/<BLOCKER-KEY> exists on remote
-  # If it does → that's our base branch (stacked PR)
-  # If multiple blockers have remote branches, use the first one found
-  # If none have remote branches (already merged) → use $DEFAULT_BRANCH
-
-  # Example logic (adapt to actual issuelinks data):
-  for BLOCKER_KEY in <BLOCKER-KEYS-FROM-ISSUELINKS>; do
-    if git ls-remote --heads origin "ralph/$BLOCKER_KEY" | grep -q .; then
-      BASE_BRANCH="ralph/$BLOCKER_KEY"
-      break
-    fi
-  done
-
-  git checkout -b "ralph/<TASK-KEY>" "origin/$BASE_BRANCH"
+  git checkout -b "ralph/<TASK-KEY>" "origin/$DEFAULT_BRANCH"
 fi
 ```
-
-**Stacked PRs**: If this task is blocked by another task that has an active `ralph/<BLOCKER-KEY>` branch, we branch from that instead of `$DEFAULT_BRANCH`. This enables parallel work — the dependent PR targets the blocker's branch, and after the blocker merges, the reviewer rebases the child.
 
 All work for this task happens on the `ralph/<TASK-KEY>` branch.
 
@@ -106,7 +87,9 @@ All work for this task happens on the `ralph/<TASK-KEY>` branch.
 
 Run the dev server if needed: `npm run dev --workspace=@frendor/consolidated-app`
 
-7. **Run full test suite**: Run `npm run test` before committing. If blocked by a genuine blocker (build failures, missing dependencies, failing tests), output `<promise>ABORT</promise>`.
+7. **Run full test suite**: Run `npm run test` before committing. If blocked by a genuine blocker (build failures, missing dependencies, failing tests):
+   1. **Check for prior ABORTs**: Read the task comments. If there is already a `RALPH_IMPLEMENTER ABORT:` comment on this task, add label `ralph-failed` instead of `needs-planning` and add comment: `"RALPH_IMPLEMENTER: Failed twice, needs human attention."` Then output `<promise>ABORT</promise>`.
+   2. **First ABORT**: Add label `needs-planning` to the task. Add comment: `"RALPH_IMPLEMENTER ABORT: <concrete reason with file paths/error messages>"`. Then output `<promise>ABORT</promise>`.
 
 **Ralph only works on existing issues assigned to the user.** It does NOT create new issues or subtasks.
 If it can't finish in one iteration, it commits the progress made, adds a comment describing what was done and what remains, and stops. The next iteration continues where it left off.
@@ -136,23 +119,13 @@ RALPH: <what you did> (<TASK-KEY>)
 Evidence: <brief description of verification performed>
 ```
 
-After committing, push and open (or update) a PR:
+After committing, push the branch:
 
 ```bash
 git push -u origin "ralph/<TASK-KEY>"
-# Create PR if one doesn't exist yet
-# Use BASE_BRANCH from branch setup (blocker branch for stacked PRs, or DEFAULT_BRANCH)
-if ! gh pr list --head "ralph/<TASK-KEY>" --json number --jq '.[0].number' 2>/dev/null | grep -q .; then
-  gh pr create --draft --base "$BASE_BRANCH" --head "ralph/<TASK-KEY>" --title "<TASK-KEY>: <summary>" --body "Implements <TASK-KEY>"
-fi
 ```
 
-**If transitioning to "In Review"** (verified with evidence), undraft the PR:
-```bash
-gh pr ready "ralph/<TASK-KEY>"
-```
-
-Do NOT undraft if keeping status at "In Progress" (partial progress).
+Do NOT create a PR — the reviewer creates the PR upon approval.
 
 ### Release the branch
 

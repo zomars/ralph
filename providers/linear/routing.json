@@ -1,11 +1,9 @@
 {
   "statuses": ["Triage", "Todo", "In Progress", "In Review", "Done", "Canceled"],
-  "pr_draft_convention": {
-    "description": "PRs are created as draft and undrafted only when ready for review. Draft status signals work-in-progress.",
-    "created_as": "draft",
-    "undraft_on": ["implementer→In Review", "tester→In Review", "fixer→push"],
-    "redraft_on": ["reviewer→reject (Path A)", "reviewer→needs-testing (Path B)"],
-    "skip_draft_in": ["fixer PR fetch", "merger PR fetch"]
+  "pr_convention": {
+    "description": "PRs are created by the reviewer only upon approval. Implementer pushes branches only.",
+    "created_by": "reviewer→approve (Path C)",
+    "created_as": "ready"
   },
   "labels": [
     "needs-planning",
