@@ -52,9 +52,13 @@ provider_fetch_tasks() {
 # Returns: task count (0 = no tasks)
 provider_check_tasks() {
   local query="$1"
-  local response
-  response=$(provider_fetch_tasks "$query" 10)
-  echo "$response" | jq '.issues | length'
+  local tmp
+  tmp=$(mktemp)
+  provider_fetch_tasks "$query" 10 > "$tmp"
+  local count
+  count=$(jq '.issues | length' "$tmp" 2>/dev/null || echo "0")
+  rm -f "$tmp"
+  echo "$count"
 }
 
 # Check if an issue has unfinished blockers
@@ -147,11 +151,10 @@ EOF
   local comments_count
   comments_count=$(echo "$issue_json" | jq '.fields.comment.comments | length')
   if [[ "$comments_count" -gt 0 ]]; then
-    local i=0
+    local i=0 author date body
     while (( i < comments_count )); do
-      local author date body
       author=$(jq -r ".fields.comment.comments[$i].author.displayName" "$desc_tmp")
-      date=$(jq -r ".fields.comment.comments[$i].created | split(\"T\")[0]" "$desc_tmp")
+      date=$(jq -r ".fields.comment.comments[$i].created | split(\".\")[0] | gsub(\"T\";\" \")" "$desc_tmp")
       body=$(_jira_adf_to_md "$desc_tmp" ".fields.comment.comments[$i].body")
       echo "### $author ($date)"
       echo ""
@@ -220,11 +223,10 @@ provider_render_kb() {
   local comments_count
   comments_count=$(jq '.fields.comment.comments | length' "$issue_file")
   if [[ "$comments_count" -gt 0 ]]; then
-    local i=0
+    local i=0 author date body
     while (( i < comments_count )); do
-      local author date body
       author=$(jq -r ".fields.comment.comments[$i].author.displayName" "$issue_file")
-      date=$(jq -r ".fields.comment.comments[$i].created | split(\"T\")[0]" "$issue_file")
+      date=$(jq -r ".fields.comment.comments[$i].created | split(\".\")[0] | gsub(\"T\";\" \")" "$issue_file")
       body=$(_jira_adf_to_md "$issue_file" ".fields.comment.comments[$i].body")
       comments_md+="### $author ($date)\n\n$body\n\n---\n"
       i=$((i + 1))
