@@ -48,7 +48,7 @@ If a referenced file is missing, verify your current branch before searching git
 
 ### 3a. Start Dev Environment & Understand What to Test
 
-1. **Start the dev environment.** You run inside an isolated git worktree. If the initial message includes "Worktree setup output", follow it **exactly** — use the startup command and URLs it provides, not defaults. Worktrees use allocated ports to avoid conflicts between instances. If no worktree context is provided, read the root README or package.json to find the dev command, commit to one approach — do not cycle between strategies if the first attempt fails.
+1. **Start the dev environment.** You run inside an isolated git worktree. If the initial message includes "Worktree setup output", follow it **exactly** — use the startup command and URLs it provides. **NEVER run `npm run dev`, `pnpm dev`, or `next dev` directly** — these may hardcode ports that conflict with worktree allocation. Only use the worktree startup script. If no worktree context is provided, read the root README or package.json to find the dev command, commit to one approach — do not cycle between strategies if the first attempt fails.
    - **After switching branches** with a running dev server, wait for hot-reload to settle (use `browser_wait_for` with expected page content) or restart the dev server before resuming browser testing.
    - If the worktree setup mentions "Test data: seeded", trust it — don't create fixtures manually.
    - If test data is missing and you can't navigate the feature, ABORT — don't spend time building fixtures.
