@@ -158,7 +158,10 @@ ralph_run_loop() {
         exit 0
       fi
       ralph_log "Not enough $no_work_label for instance #$instance_num ($work_count available). Sleeping ${poll_interval}s..."
-      ralph_cooldown "$poll_interval" "${(U)agent_name} #$instance_num | Waiting" || _loop_die
+      local wait_label="Iteration $iteration"
+      [[ -n "$last_task_key" ]] && wait_label+=" | Last: $last_task_key"
+      wait_label+=" | Waiting"
+      ralph_cooldown "$poll_interval" "${(U)agent_name} #$instance_num | $wait_label" || _loop_die
       continue
     fi
 
@@ -171,7 +174,10 @@ ralph_run_loop() {
         exit 0
       fi
       ralph_log "No eligible $no_work_label for instance #$instance_num. Sleeping ${poll_interval}s..."
-      ralph_cooldown "$poll_interval" "${(U)agent_name} #$instance_num | Waiting" || _loop_die
+      local wait_label2="Iteration $iteration"
+      [[ -n "$last_task_key" ]] && wait_label2+=" | Last: $last_task_key"
+      wait_label2+=" | Waiting"
+      ralph_cooldown "$poll_interval" "${(U)agent_name} #$instance_num | $wait_label2" || _loop_die
       continue
     fi
 
@@ -291,6 +297,6 @@ PROMPT_EOF
     fi
 
     ralph_log "Iteration complete. Cooldown ${poll_interval}s..."
-    ralph_cooldown "$poll_interval" "${(U)agent_name} #$instance_num | Cooldown" || _loop_die
+    ralph_cooldown "$poll_interval" "${(U)agent_name} #$instance_num | Iteration $iteration | Cooldown" || _loop_die
   done
 }
