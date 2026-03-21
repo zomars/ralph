@@ -84,6 +84,19 @@ provider_check_tasks() {
   echo "$response" | jq '.issues | length'
 }
 
+# Get keys of unresolved blockers for an issue
+# Args: $1 = path to JSON file, $2 = blocker_check mode (unused)
+# Outputs: space-separated blocker keys (empty if none)
+provider_get_unresolved_blocker_keys() {
+  local issue_file="$1"
+  jq -r '[
+    .fields.issuelinks[]?
+    | select(.type.inward == "is blocked by")
+    | select(.outwardIssue.fields.status.statusCategory.key != "done")
+    | .outwardIssue.key
+  ] | join(" ")' "$issue_file"
+}
+
 # Check if an issue has unfinished blockers
 # Args: $1 = path to JSON file (normalized format), $2 = blocker_check mode (unused)
 # Returns: 0 if no blockers, 1 if blocked

@@ -180,6 +180,7 @@ provider_fetch_tasks() {
 }
 
 # No native blocking — always unblocked
+provider_get_unresolved_blocker_keys() { echo ""; }
 provider_check_blockers() { return 0; }
 
 # Stub KB writer

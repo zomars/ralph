@@ -33,6 +33,53 @@ ralph_gated_loop() {
     jq '.issues | length' "$LOOP_WORK_FILE"
   }
 
+  # Traverse blocker chain to find the deepest unblocked blocker that matches
+  # the agent's query. Returns 0 and writes the blocker to $_task_file if found.
+  # Args: $1 = issue file, $2 = blocker_check mode, $3 = agent query
+  #        $4 = visited keys (colon-separated, for cycle detection)
+  _traverse_blockers() {
+    local issue_file="$1" mode="$2" query="$3" visited="$4"
+    local blocker_keys
+    blocker_keys=$(provider_get_unresolved_blocker_keys "$issue_file" "$mode")
+    [[ -z "$blocker_keys" ]] && return 1
+
+    local tmp_blocker
+    tmp_blocker=$(mktemp)
+    for bk in ${=blocker_keys}; do
+      # Cycle detection
+      [[ ":$visited:" == *":$bk:"* ]] && continue
+
+      # Fetch this blocker with the agent's query to check if it matches
+      # Strip ORDER BY clause before wrapping in parens (JQL syntax)
+      local base_query="${query%% ORDER BY *}"
+      local bk_query="($base_query) AND key = \"$bk\""
+      local tmp_result
+      tmp_result=$(mktemp)
+      provider_fetch_tasks "$bk_query" 1 > "$tmp_result"
+      local match_count
+      match_count=$(jq '.issues | length' "$tmp_result")
+
+      if (( match_count > 0 )); then
+        jq '.issues[0]' "$tmp_result" > "$tmp_blocker"
+        rm -f "$tmp_result"
+        # Check if this blocker is itself blocked — if so, recurse deeper
+        if ! provider_check_blockers "$tmp_blocker" "$mode"; then
+          if _traverse_blockers "$tmp_blocker" "$mode" "$query" "$visited:$bk"; then
+            rm -f "$tmp_blocker"
+            return 0  # deeper blocker was picked into $_task_file
+          fi
+        fi
+        # This blocker is unblocked (or its blockers don't match) — pick it
+        cp "$tmp_blocker" "$_task_file"
+        rm -f "$tmp_blocker"
+        return 0
+      fi
+      rm -f "$tmp_result"
+    done
+    rm -f "$tmp_blocker"
+    return 1
+  }
+
   loop_pick_work() {
     # instance_num is set by ralph_run_loop in the parent scope (zsh dynamic scoping)
     local task_count
@@ -41,6 +88,8 @@ ralph_gated_loop() {
     _exclude_blocked=$(jq -r ".agents.${_agent_key}.rules.exclude_blocked // false" "$(ralph_get_routing_json)")
     local _blocker_check
     _blocker_check=$(jq -r ".agents.${_agent_key}.rules.blocker_check // \"done\"" "$(ralph_get_routing_json)")
+    local _query
+    _query="$(ralph_get_query "$_agent_key")"
     local unblocked_seen=0 pick_idx=0
     while (( pick_idx < task_count )); do
       jq ".issues[$pick_idx]" "$LOOP_WORK_FILE" > "$_task_file"
@@ -52,7 +101,22 @@ ralph_gated_loop() {
           return 0
         fi
       else
-        ralph_log "Skipping $(jq -r '.key' "$_task_file") (blocked)"
+        local blocked_key
+        blocked_key=$(jq -r '.key' "$_task_file")
+        # Traverse blocker chain — pick the deepest unblocked blocker that matches
+        if _traverse_blockers "$_task_file" "$_blocker_check" "$_query" "$blocked_key"; then
+          unblocked_seen=$((unblocked_seen + 1))
+          if (( unblocked_seen == instance_num )); then
+            LOOP_TASK_KEY=$(jq -r '.key' "$_task_file")
+            ralph_log "Traversed blockers: $blocked_key → $LOOP_TASK_KEY"
+            LOOP_TASK_DISPLAY="Task: $LOOP_TASK_KEY (unblocks $blocked_key)"
+            return 0
+          fi
+        else
+          local bkeys
+          bkeys=$(provider_get_unresolved_blocker_keys "$_task_file" "$_blocker_check")
+          ralph_log "Skipping $blocked_key (blocked by ${bkeys:-unknown}, not in this agent's scope)"
+        fi
       fi
       pick_idx=$((pick_idx + 1))
     done

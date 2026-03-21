@@ -91,6 +91,7 @@ ralph_load_provider() {
 
   # Validate provider interface
   local required=(provider_fetch_tasks provider_check_tasks provider_check_blockers
+                  provider_get_unresolved_blocker_keys
                   provider_render_kb provider_write_kb provider_rules_to_query)
   local func
   for func in "${required[@]}"; do

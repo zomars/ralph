@@ -42,6 +42,7 @@ provider_fetch_tasks() {
 }
 
 # No blocking concept in file provider
+provider_get_unresolved_blocker_keys() { echo ""; }
 provider_check_blockers() { return 0; }
 
 # Stub KB writer

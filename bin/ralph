@@ -378,6 +378,40 @@ cmd_debug() {
     _exclude_blocked=$(jq -r ".agents.${agent_key}.rules.exclude_blocked // false" "$(ralph_get_routing_json)")
     local _blocker_check
     _blocker_check=$(jq -r ".agents.${agent_key}.rules.blocker_check // \"done\"" "$(ralph_get_routing_json)")
+
+    # Blocker traversal helper (same as ralph-gated-loop.sh)
+    _preview_traverse_blockers() {
+      local issue_file="$1" mode="$2" q="$3" visited="$4"
+      local blocker_keys
+      blocker_keys=$(provider_get_unresolved_blocker_keys "$issue_file" "$mode")
+      [[ -z "$blocker_keys" ]] && return 1
+      local tmp_blocker tmp_result
+      tmp_blocker=$(mktemp)
+      for bk in ${=blocker_keys}; do
+        [[ ":$visited:" == *":$bk:"* ]] && continue
+        local base_q="${q%% ORDER BY *}"
+        local bk_query="($base_q) AND key = \"$bk\""
+        tmp_result=$(mktemp)
+        provider_fetch_tasks "$bk_query" 1 > "$tmp_result"
+        local mc
+        mc=$(jq '.issues | length' "$tmp_result")
+        if (( mc > 0 )); then
+          jq '.issues[0]' "$tmp_result" > "$tmp_blocker"
+          rm -f "$tmp_result"
+          if ! provider_check_blockers "$tmp_blocker" "$mode"; then
+            if _preview_traverse_blockers "$tmp_blocker" "$mode" "$q" "$visited:$bk"; then
+              rm -f "$tmp_blocker"; return 0
+            fi
+          fi
+          cp "$tmp_blocker" "$_task_file"
+          rm -f "$tmp_blocker"; return 0
+        fi
+        rm -f "$tmp_result"
+      done
+      rm -f "$tmp_blocker"
+      return 1
+    }
+
     local unblocked_seen=0 pick_idx=0 found=false
     while (( pick_idx < task_count )); do
       jq ".issues[$pick_idx]" "$LOOP_WORK_FILE" > "$_task_file"
@@ -386,6 +420,17 @@ cmd_debug() {
         if (( unblocked_seen == instance_num )); then
           found=true
           break
+        fi
+      else
+        local bkey
+        bkey=$(jq -r '.key' "$_task_file")
+        if _preview_traverse_blockers "$_task_file" "$_blocker_check" "$query" "$bkey"; then
+          unblocked_seen=$((unblocked_seen + 1))
+          if (( unblocked_seen == instance_num )); then
+            echo "Traversed blockers: $bkey → $(jq -r '.key' "$_task_file")"
+            found=true
+            break
+          fi
         fi
       fi
       pick_idx=$((pick_idx + 1))
