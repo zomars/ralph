@@ -189,6 +189,17 @@ ralph_run_loop() {
     local initial_message
     initial_message=$(loop_build_context)
 
+    # Log the full prompt for debugging: ralph debug {agent} --prompt
+    local prompt_log="$instance_slot/prompt.log"
+    cat > "$prompt_log" <<PROMPT_EOF
+======== SYSTEM PROMPT ========
+$(cat "$prompt_file")
+
+$(cat "$provider_instructions" 2>/dev/null)
+======== INITIAL MESSAGE ========
+$initial_message
+PROMPT_EOF
+
     local max_iteration_seconds="${RALPH_MAX_ITERATION_SECONDS:-1800}"
 
     # Write Claude output to a file (not a pipe). Child processes spawned by

@@ -35,10 +35,14 @@ Debugging:
     -f, --follow    Live tail (like tail -f)
     -n, --lines N   Number of lines to show (default: 200)
     --raw           Show raw JSON instead of rendered text
+    --prompt        Show last iteration's full prompt (system + initial message)
+    --preview-prompt Assemble system prompt on-the-fly (no iteration needed)
 
 Utility commands:
   validate          Run routing validation (accepts --matrix, --check-prompts, --check-loops, --check-all)
   status            Show task counts and running instances for all agents
+  cleanup           Remove orphan processes, stale slots, and orphan worktrees
+    --dry-run       Show what would be cleaned without acting
   init              Create a .ralphrc file in the current directory
   config            Show current configuration
   version           Show version
@@ -166,6 +170,64 @@ cmd_status() {
   printf "%-14s %5s  %7s\n" "Total" "$total_tasks" "$total_running"
 }
 
+cmd_cleanup() {
+  local dry_run=false
+  [[ "${1:-}" == "--dry-run" ]] && dry_run=true
+  local found=false
+
+  # 1. Find & kill orphan agent processes, clean stale slots
+  for agent_dir in /tmp/ralph-*/; do
+    [[ "$agent_dir" == "/tmp/ralph-worktrees/" ]] && continue
+    [[ -d "$agent_dir" ]] || continue
+    for pidfile in "$agent_dir"*/pid(N); do
+      local pid=$(<"$pidfile")
+      local slot_dir="${pidfile:h}"
+      if ! kill -0 "$pid" 2>/dev/null; then
+        echo "Stale slot: $slot_dir (PID $pid dead)"
+        found=true
+        $dry_run || rm -rf "$slot_dir"
+      fi
+    done
+  done
+
+  # 2. Kill processes referencing orphan worktrees, then remove them
+  for wt in /tmp/ralph-worktrees/*(N/); do
+    local agent_instance="${wt:t}"
+    local agent="${agent_instance%-*}"
+    local inst="${agent_instance##*-}"
+    local slot="/tmp/ralph-$agent/$inst/pid"
+    if [[ ! -f "$slot" ]] || ! kill -0 "$(<"$slot")" 2>/dev/null; then
+      echo "Orphan worktree: $wt"
+      found=true
+      if ! $dry_run; then
+        ralph_cleanup_worktree_processes "$wt"
+        ralph_cleanup_worktree "$wt"
+      fi
+    fi
+  done
+
+  # 3. Clean stale work files
+  for wf in /tmp/ralph-*-work.json(N); do
+    local base="${wf:t}"
+    base="${base%-work.json}"
+    base="${base#ralph-}"
+    local agent="${base%-*}"
+    local inst="${base##*-}"
+    local slot="/tmp/ralph-$agent/$inst/pid"
+    if [[ ! -f "$slot" ]] || ! kill -0 "$(<"$slot")" 2>/dev/null; then
+      echo "Stale work file: $wf"
+      found=true
+      $dry_run || rm -f "$wf"
+    fi
+  done
+
+  # 4. git worktree prune
+  $dry_run || git worktree prune 2>/dev/null || true
+
+  $found || echo "Nothing to clean."
+  echo "Cleanup complete."
+}
+
 cmd_version() {
   echo "ralph $RALPH_VERSION"
 }
@@ -236,16 +298,18 @@ cmd_github_agent() {
 
 cmd_debug() {
   # Parse args: ralph debug <agent> [instance] [-f|--follow] [-n|--lines N] [--raw]
-  local agent_key="" instance_num=1 follow=false raw=false lines=200
+  local agent_key="" instance_num=1 follow=false raw=false prompt=false preview_prompt=false lines=200
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
       -f|--follow) follow=true; shift ;;
       --raw) raw=true; shift ;;
+      --prompt) prompt=true; shift ;;
+      --preview-prompt) preview_prompt=true; shift ;;
       -n|--lines) lines="$2"; shift 2 ;;
       -*)
         echo "Unknown option: $1"
-        echo "Usage: ralph debug <agent> [instance] [-f|--follow] [-n|--lines N] [--raw]"
+        echo "Usage: ralph debug <agent> [instance] [-f|--follow] [-n|--lines N] [--raw] [--prompt] [--preview-prompt]"
         exit 1
         ;;
       *)
@@ -277,8 +341,108 @@ cmd_debug() {
   esac
 
   source "$RALPH_HOME/lib/ralph-core.sh"
+
+  # --preview-prompt mode: fetch real task and assemble the full prompt the agent will see
+  if [[ "$preview_prompt" == "true" ]]; then
+    source "$RALPH_HOME/lib/ralph-gated-loop.sh"
+
+    # Reuse the gated-loop callbacks (they define loop_init, loop_fetch_work, etc.)
+    # We call ralph_gated_loop indirectly by sourcing it, which already defined the closures.
+    # But we need to set up the same state the loop would.
+    local _agent_key="$agent_key"
+    local instance_num="$instance_num"
+
+    ralph_load_provider
+
+    local prompt_file provider_instructions
+    prompt_file="$(ralph_get_prompt "$agent_key")"
+    provider_instructions="$(ralph_get_provider_instructions)"
+
+    # Fetch tasks from provider
+    local _task_file="/tmp/ralph-${agent_key}-preview-task.json"
+    local LOOP_WORK_FILE="/tmp/ralph-${agent_key}-preview-work.json"
+    local query
+    query="$(ralph_get_query "$agent_key")"
+    provider_fetch_tasks "$query" 10 > "$LOOP_WORK_FILE"
+
+    local task_count
+    task_count=$(jq '.issues | length' "$LOOP_WORK_FILE")
+    if (( task_count == 0 )); then
+      echo "No tasks found for $agent_key (instance $instance_num). Nothing to preview."
+      rm -f "$_task_file" "$LOOP_WORK_FILE"
+      return
+    fi
+
+    # Pick task using same blocker-aware logic as the real loop
+    local _blocker_check
+    _blocker_check=$(jq -r ".agents.${agent_key}.rules.blocker_check // \"done\"" "$(ralph_get_routing_json)")
+    local unblocked_seen=0 pick_idx=0 found=false
+    while (( pick_idx < task_count )); do
+      jq ".issues[$pick_idx]" "$LOOP_WORK_FILE" > "$_task_file"
+      if provider_check_blockers "$_task_file" "$_blocker_check"; then
+        unblocked_seen=$((unblocked_seen + 1))
+        if (( unblocked_seen == instance_num )); then
+          found=true
+          break
+        fi
+      fi
+      pick_idx=$((pick_idx + 1))
+    done
+
+    if [[ "$found" != "true" ]]; then
+      echo "No unblocked task available for $agent_key instance $instance_num ($task_count tasks found, all blocked or claimed)."
+      rm -f "$_task_file" "$LOOP_WORK_FILE"
+      return
+    fi
+
+    local task_key
+    task_key=$(jq -r '.key' "$_task_file")
+
+    # Build the initial message (same as loop_build_context)
+    local task_kb
+    task_kb=$(provider_render_kb "$_task_file")
+    local initial_message="You are RALPH_${(U)agent_key}, instance $instance_num. Your worktree is: (preview — no worktree) (project root: $(pwd)).
+
+$task_kb
+
+Execute your workflow now. Start with Step 1."
+
+    echo "── ${agent_key} #${instance_num} preview — task $task_key ──"
+    echo ""
+    echo "======== SYSTEM PROMPT ========"
+    cat "$prompt_file"
+    echo ""
+    if [[ -f "$provider_instructions" ]]; then
+      cat "$provider_instructions"
+    fi
+    echo ""
+    echo "======== INITIAL MESSAGE ========"
+    echo "$initial_message"
+
+    rm -f "$_task_file" "$LOOP_WORK_FILE"
+    return
+  fi
+
   ralph_get_jq_filters
   local stream_text="$RALPH_STREAM_FILTER"
+
+  # --prompt mode: show the prompt log (plain text, no jq)
+  if [[ "$prompt" == "true" ]]; then
+    local prompt_log="/tmp/ralph-${agent_key}/${instance_num}/prompt.log"
+    if [[ ! -f "$prompt_log" ]]; then
+      echo "No prompt log found at $prompt_log"
+      echo "The agent must complete at least one iteration to generate prompt.log."
+      exit 1
+    fi
+    echo "── ${agent_key} #${instance_num} prompt ──"
+    echo ""
+    if [[ "$follow" == "true" ]]; then
+      tail -f "$prompt_log"
+    else
+      tail -n "$lines" "$prompt_log"
+    fi
+    return
+  fi
 
   # Try live session log first
   local session_log="/tmp/ralph-${agent_key}/${instance_num}/session.log"
@@ -341,6 +505,7 @@ case "$subcmd" in
   init)               cmd_init ;;
   config)             cmd_config ;;
   status)             cmd_status ;;
+  cleanup)            cmd_cleanup "$@" ;;
   debug)              cmd_debug "$@" ;;
   version|-v)         cmd_version ;;
   help|--help|-h|"")  usage ;;

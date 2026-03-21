@@ -12,6 +12,11 @@ ralph_setup_worktree() {
   RALPH_WORKTREE_DIR="/tmp/ralph-worktrees/${agent_key}-${instance_num}"
   RALPH_WORKTREE_CONTEXT=""
 
+  # Serialize worktree creation — concurrent git worktree add races on .git/config
+  local git_lock="/tmp/ralph-git-worktree.lock"
+  while ! mkdir "$git_lock" 2>/dev/null; do sleep 0.5; done
+  trap 'rmdir "$git_lock" 2>/dev/null' EXIT
+
   # Check for valid worktree (not just directory existence — stale dirs without .git happen)
   if [[ ! -d "$RALPH_WORKTREE_DIR" ]] || ! git -C "$RALPH_WORKTREE_DIR" rev-parse --git-dir &>/dev/null; then
     rm -rf "$RALPH_WORKTREE_DIR" 2>/dev/null || true
@@ -43,6 +48,10 @@ ralph_setup_worktree() {
     fi
   fi
 
+  # Release git lock — worktree is created, safe for others now
+  rmdir "$git_lock" 2>/dev/null || true
+  trap - EXIT
+
   # Build .mcp.json: start from project's copy (or empty), layer provider MCP on top,
   # then commit so reset --hard between iterations preserves it.
   git show HEAD:.mcp.json > "$RALPH_WORKTREE_DIR/.mcp.json" 2>/dev/null \
@@ -57,21 +66,15 @@ ralph_setup_worktree() {
   git -C "$RALPH_WORKTREE_DIR" add .mcp.json \
     && git -C "$RALPH_WORKTREE_DIR" commit --no-verify -m "ralph: configure MCP servers" 2>/dev/null || true
 
-  # Overlay project-specific files from ~/.ralph/projects/<project>/ into the worktree.
-  # These files live outside both repos — not committed to the target project or ralph.
+  # Run project-specific worktree setup from its original location (not copied).
+  # This avoids files being wiped by git checkout / reset --hard.
+  # Priority: explicit RALPH_WORKTREE_SETUP > auto-detect in project overlay dir
+  # Stdout is captured into RALPH_WORKTREE_CONTEXT for the agent; stderr passes through.
   local project_name="${RALPH_PROJECT:-$(basename "$PWD")}"
   local project_overlay="$HOME/.ralph/projects/$project_name"
-  if [[ -d "$project_overlay" ]]; then
-    cp -r "$project_overlay"/ "$RALPH_WORKTREE_DIR"/
-    ralph_log "Overlaid project files from $project_overlay"
-  fi
-
-  # Run project-specific worktree setup.
-  # Priority: explicit RALPH_WORKTREE_SETUP > auto-detect scripts/worktree-setup.sh
-  # Stdout is captured into RALPH_WORKTREE_CONTEXT for the agent; stderr passes through.
   local setup_cmd="${RALPH_WORKTREE_SETUP:-}"
-  if [[ -z "$setup_cmd" && -f "$RALPH_WORKTREE_DIR/scripts/worktree-setup.sh" ]]; then
-    setup_cmd="bash scripts/worktree-setup.sh"
+  if [[ -z "$setup_cmd" && -f "$project_overlay/scripts/worktree-setup.sh" ]]; then
+    setup_cmd="bash \"$project_overlay/scripts/worktree-setup.sh\" \"$RALPH_WORKTREE_DIR\""
   fi
   if [[ -n "$setup_cmd" ]]; then
     ralph_log "Running worktree setup: $setup_cmd"

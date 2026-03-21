@@ -24,6 +24,17 @@ The task has been pre-selected and dependency-validated by the guard. The initia
 
 ## 3. Plan & Refine
 
+### Re-planning (task has `needs-planning` from agent ABORT)
+
+If the task has label `needs-planning` AND existing comments from RALPH agents containing "ABORT":
+1. Read the ABORT comment to understand what went wrong
+2. Re-scope the description to address the failure (add missing details, clarify ambiguity, break into subtasks if too large)
+3. Remove label `needs-planning`
+4. Add comment: `"RALPH_PLANNER: Re-planned after ABORT. Changes: <what you fixed in the spec>"`
+5. Skip to **Step 4** (Update Backlog) — do not duplicate the planning steps below
+
+### Standard planning
+
 **Goal**: Turn a vague idea into a workable specification.
 
 1.  **Analyze**: Read the Summary.
