@@ -46,6 +46,10 @@ Utility commands:
   init              Create a .ralphrc file in the current directory
   config            Show current configuration
   version           Show version
+  watchdog          Analyze agent session logs for patterns and anti-patterns
+    --since <dur>   Only analyze logs from last duration (e.g. 2h, 30m, 1d)
+    --agent <name>  Filter to one agent type
+    --apply         Auto-append suggested rules to target project's CLAUDE.md
   help              Show this help message
 EOF
 }
@@ -545,6 +549,37 @@ _debug_render() {
   fi
 }
 
+cmd_watchdog() {
+  source "$RALPH_HOME/lib/ralph-watchdog.sh"
+
+  local since="" agent="" apply=false
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --since) since="$2"; shift 2 ;;
+      --agent) agent="$2"; shift 2 ;;
+      --apply) apply=true; shift ;;
+      *)
+        echo "Unknown option for watchdog: $1"
+        echo "Usage: ralph watchdog [--since <dur>] [--agent <name>] [--apply]"
+        exit 1
+        ;;
+    esac
+  done
+
+  local collect_args=()
+  [[ -n "$since" ]] && collect_args+=(--since "$since")
+  [[ -n "$agent" ]] && collect_args+=(--agent "$agent")
+
+  ralph_watchdog_collect_logs "${collect_args[@]}" || exit 1
+  ralph_watchdog_run || exit 1
+  ralph_watchdog_save_report
+  ralph_watchdog_print_patch
+
+  if $apply; then
+    ralph_watchdog_apply_patch "."
+  fi
+}
+
 subcmd="${1:-}"
 [[ -n "$subcmd" ]] && shift
 
@@ -557,6 +592,7 @@ case "$subcmd" in
   version|-v)         cmd_version ;;
   help|--help|-h|"")  usage ;;
   validate)           exec "$RALPH_HOME/bin/validate-routing-impl" "$@" ;;
+  watchdog)            cmd_watchdog "$@" ;;
   planner|implementer|reviewer|tester|refactor|documenter)
                       cmd_agent "$subcmd" "$@" ;;
   fixer|merger)       cmd_github_agent "$subcmd" "$@" ;;
