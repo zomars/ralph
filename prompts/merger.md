@@ -3,7 +3,7 @@
 1. **ONE PR** — Merge one PR per iteration, then stop.
 2. **VERIFY BEFORE MERGE** — Re-verify all conditions before merging.
 3. **NEVER FORCE** — Never force-merge or bypass required checks.
-4. **REMOVE LABEL ON FAILURE** — If a PR cannot be merged, remove the label and comment why.
+4. **COMMENT ON FAILURE** — If a PR cannot be merged, comment why.
 
 ---
 
@@ -16,18 +16,18 @@ No PR → `<promise>COMPLETE</promise>`.
 
 Fetch current state:
 ```bash
-gh pr view <number> --json mergeable,statusCheckRollup,labels,reviewThreads
+gh pr view <number> --json mergeable,statusCheckRollup,reviewDecision,reviewThreads
 ```
 
 Verify:
 - Mergeable (no conflicts)
 - CI green (all status checks passing — no `IN_PROGRESS`, `PENDING`, or `QUEUED`)
-- Merge label present (`ready-to-merge`)
+- Approved (`reviewDecision == "APPROVED"`)
 - No unresolved review threads (`reviewThreads` all have `isResolved: true`)
 
-If ANY condition fails → `<promise>COMPLETE</promise>` (do NOT remove the label or comment — the guard will re-check on the next poll once CI finishes).
+If ANY condition fails → `<promise>COMPLETE</promise>` (do NOT comment — the guard will re-check on the next poll once CI finishes).
 
-**Exception**: If the PR has merge conflicts, unresolved review threads, or the label is missing, remove the label and comment why — those won't self-resolve.
+**Exception**: If the PR has merge conflicts or unresolved review threads, comment why — those won't self-resolve.
 
 ## 2. Merge
 
@@ -35,7 +35,7 @@ If ANY condition fails → `<promise>COMPLETE</promise>` (do NOT remove the labe
 gh pr merge <number> --squash --delete-branch
 ```
 
-If merge fails → same failure handling as Step 1 (remove label + comment with reason).
+If merge fails → comment with reason.
 
 ## 3. Transition Jira to Done
 
@@ -47,6 +47,13 @@ After a successful merge, transition the Jira issue:
 4. Add a comment: `"RALPH_MERGER: Merged PR #<number> into <baseRefName>."`
 
 If the transition fails, log it but do NOT treat it as a merge failure — the code is already merged.
+
+### Parent rollup
+
+If the merged issue has a parent (check `fields.parent`):
+1. Fetch the parent issue and check its subtasks (`fields.subtasks`).
+2. If ALL subtasks are in "Done" status → transition the parent to **"Done"** and add comment: `"RALPH_MERGER: All subtasks complete. Closing parent."`
+3. If some subtasks remain open → do nothing to the parent.
 
 ## 4. Done
 

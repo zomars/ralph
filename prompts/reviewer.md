@@ -68,13 +68,12 @@ Based on your analysis, choose ONE path:
 - **Precondition**: Tests pass, code is clean, AND a test report with screenshots exists that adequately covers the ticket's acceptance criteria.
 - **Action**: Comment "Verified. Tests passed. Browser testing evidence confirmed. Code looks good."
 - **Jira Label**: Read current labels from the issue, append `ready-to-merge`, and update via `editJiraIssue` with the full label list as `{"labels": [{"name": "label1"}, {"name": "ready-to-merge"}]}`. This prevents the reviewer from re-picking this task.
-- **Create PR and label**:
+- **Create PR and approve**:
   ```bash
   DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')
   gh pr create --base "$DEFAULT_BRANCH" --head "ralph/<TASK-KEY>" \
     --title "<TASK-KEY>: <summary>" --body "Implements <TASK-KEY>"
-  gh label create ready-to-merge --description "Reviewer-approved" --color 0E8A16 --force
-  gh pr edit "ralph/<TASK-KEY>" --add-label "ready-to-merge"
+  gh pr review "ralph/<TASK-KEY>" --approve
   ```
 - **Transition**: Keep status at **"In Review"** — the merger will move it to "Done" after merging.
 

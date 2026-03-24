@@ -36,5 +36,3 @@ export RALPH_POLL_INTERVAL=5
 # export RALPH_PLANNER_MODEL="opus"      # override specific agent
 # export RALPH_MERGER_MODEL="haiku"
 
-# Merger agent settings
-# export RALPH_MERGE_LABEL="ready-to-merge"  # Label that triggers merger (default: ready-to-merge)

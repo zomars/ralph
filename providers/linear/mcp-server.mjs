@@ -261,7 +261,61 @@ server.tool(
   }
 );
 
-// 7. Create relation
+// 7. Create issue
+server.tool(
+  "createIssue",
+  "Create a new Linear issue (optionally as a sub-issue of a parent)",
+  {
+    teamId: z.string().describe("Team key (e.g. ENG)"),
+    title: z.string().describe("Issue title"),
+    description: z.string().optional().describe("Description in markdown"),
+    parentId: z.string().optional().describe("Parent issue identifier for sub-issues (e.g. ENG-123)"),
+    labelIds: z.array(z.string()).optional().describe("Label UUIDs to apply"),
+    stateId: z.string().optional().describe("Workflow state UUID"),
+    priority: z.number().optional().describe("Priority (0=none, 1=urgent, 2=high, 3=medium, 4=low)"),
+  },
+  async ({ teamId, title, description, parentId, labelIds, stateId, priority }) => {
+    try {
+      // Resolve team key to team ID
+      const teamData = await linear(
+        `query ($key: String!) { team(id: $key) { id } }`,
+        { key: teamId }
+      );
+      if (!teamData.team) throw new Error(`Team not found: ${teamId}`);
+
+      const input = { teamId: teamData.team.id, title };
+      if (description) input.description = description;
+      if (labelIds?.length) input.labelIds = labelIds;
+      if (stateId) input.stateId = stateId;
+      if (priority != null) input.priority = priority;
+
+      // Resolve parent identifier to UUID if provided
+      if (parentId) {
+        const parentData = await linear(
+          `query ($id: String!) { issue(id: $id) { id } }`,
+          { id: parentId }
+        );
+        if (!parentData.issue) throw new Error(`Parent issue not found: ${parentId}`);
+        input.parentId = parentData.issue.id;
+      }
+
+      const data = await linear(
+        `mutation ($input: IssueCreateInput!) {
+          issueCreate(input: $input) {
+            success
+            issue { id identifier title state { name } }
+          }
+        }`,
+        { input }
+      );
+      return ok(data.issueCreate);
+    } catch (e) {
+      return err(e.message);
+    }
+  }
+);
+
+// 8. Create relation
 server.tool(
   "createRelation",
   "Create a relation between two Linear issues (e.g. blocks, relates, duplicates)",

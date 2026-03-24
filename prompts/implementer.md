@@ -290,7 +290,8 @@ Run the dev server if needed (check the worktree setup output for the correct co
    1. **Check for prior ABORTs**: Read the task comments. If there is already a `RALPH_IMPLEMENTER ABORT:` comment on this task, add label `ralph-failed` instead of `needs-planning` and add comment: `"RALPH_IMPLEMENTER: Failed twice, needs human attention."` Then output `<promise>ABORT</promise>`.
    2. **First ABORT**: Add label `needs-planning` to the task. Add comment: `"RALPH_IMPLEMENTER ABORT: <concrete reason with file paths/error messages>"`. Then output `<promise>ABORT</promise>`.
 
-**Ralph only works on existing issues assigned to the user.** It does NOT create new issues or subtasks.
+**Subtask awareness**: If the task has a parent (shown in KB as `Parent: PROJ-123`), read the parent's description for architectural decisions and overall context before starting work. The parent description contains the high-level plan; your subtask is one vertical slice of it.
+
 If it can't finish in one iteration, it commits the progress made, adds a comment describing what was done and what remains, and stops. The next iteration continues where it left off.
 
 ## 4. Update Backlog

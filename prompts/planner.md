@@ -35,30 +35,39 @@ If the task has label `needs-planning` AND existing comments from RALPH agents c
 
 ### Standard planning
 
-**Goal**: Turn a vague idea into a workable specification.
+**Goal**: Turn a vague idea into a workable specification using tracer-bullet vertical slices.
 
 1.  **Analyze**: Read the Summary.
-2.  **Context**: Check code or other tickets to understand what "fix X" or "implement Y" means.
-3.  **Draft Description**:
-    - **User Story**: "As a [User], I want [Feature], so that [Benefit]."
-    - **Acceptance Criteria**: Checklist of what "Done" looks like.
-    - **Technical Notes**: Files to touch, API endpoints to change.
-4.  **Create dependency links**:
-    - **Between siblings**: When subtasks have natural ordering (e.g., "Create API endpoint" before "Build UI for endpoint"), link them so the prerequisite **blocks** the dependent task.
-    - **Children block parent**: Every subtask must **block** its parent issue. This prevents agents from picking up the parent while any subtask is still incomplete.
-5.  **Unknowns?**: If you genuinely don't know what to do:
+2.  **Context**: Explore the codebase and check other tickets to understand what "fix X" or "implement Y" means. Identify durable architectural decisions (routes, schema, key models, auth approach, third-party boundaries).
+3.  **Draft vertical slices**: Break the task into **tracer bullet** phases. Each phase is a thin vertical slice that cuts through ALL integration layers end-to-end (schema → API → UI → tests), NOT a horizontal slice of one layer.
+    - Each slice delivers a narrow but COMPLETE path through every layer
+    - A completed slice is demoable or verifiable on its own
+    - **Split aggressively** — prefer many small subtasks over few large ones. Each subtask should be completable in a single agent iteration.
+    - Do NOT include specific file names, function names, or implementation details likely to change as later phases are built
+    - DO include durable decisions: route paths, schema shapes, data model names
+    - If the task is truly trivial (single-file fix), skip splitting
+4.  **Create subtasks**: For each vertical slice, create a subtask under the parent issue using `createJiraIssue` with `parentKey` set to the current task's key. Each subtask gets:
+    - **Summary**: Short, action-oriented title
+    - **Description**: What to build (end-to-end behavior, not layer-by-layer) + acceptance criteria checklist
+5.  **Create dependency links** using `createIssueLink` with link type "Blocks":
+    - **Sequential chaining**: Each subtask is blocked by the previous one (subtask-2 blocked by subtask-1, etc.). The first subtask has no blockers.
+    - **Children block parent**: Every subtask must **block** the parent issue. This prevents agents from picking up the parent while any subtask is still incomplete.
+6.  **Update parent description**: Set the parent's description to an overview with:
+    - **Architectural decisions**: Durable decisions that apply across all subtasks (routes, schema, models)
+    - **Subtask summary**: Numbered list of subtask keys and titles for quick reference
+7.  **Unknowns?**: If you genuinely don't know what to do:
     - Add label `needs-input`.
     - Add comment: "@[User] I need clarification on X."
     - STOP.
 
 ## 4. Update Backlog
 
-1.  **Update Description**: Use the backlog edit tool to set the new rich description. The plan MUST go in the description field — never in a comment. Comments are only for mentioning what changed or requesting clarification.
-2.  **Remove Label**: If the ticket had `needs-planning`, remove it.
-3.  **Transition**:
-    - If ready for work: Transition to **"To Do"**.
+1.  **Remove Label**: If the ticket had `needs-planning`, remove it.
+2.  **Transition**:
+    - If subtasks were created: Transition parent to **"To Do"**. The first unblocked subtask will be picked up by the implementer.
+    - If no subtasks (trivial task): Transition to **"To Do"**.
     - If `needs-tests` (e.g. "Write tests for X"): Add label `needs-tests`.
-    - **Never transition to "Done" or "In Review"** — only the Reviewer can mark tasks complete. If a task appears already implemented, transition to "To Do" so it goes through the normal review pipeline.
+    - **Never transition to "Done" or "In Review"** — only the Reviewer can mark tasks complete.
 
 ## 5. Commit & Stop
 

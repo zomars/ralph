@@ -12,6 +12,7 @@ You are connected to Linear as the backlog provider. Use the following tools and
 - **Add comment**: `mcp__linear__addComment` — body is markdown
 - **Get workflow states**: `mcp__linear__getWorkflowStates` — list states for a team (use to discover `stateId` values)
 - **Get labels**: `mcp__linear__getTeamLabels` — list labels for a team (use to discover `labelId` values)
+- **Create issue**: `mcp__linear__createIssue` — create a new issue (optionally as a sub-issue of a parent)
 - **Create relation**: `mcp__linear__createRelation` — link two issues (`blocks`, `duplicate`, `related`)
 
 ## Status Names

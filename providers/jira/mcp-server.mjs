@@ -406,7 +406,37 @@ server.tool(
   }
 );
 
-// 8. Create remote link
+// 8. Create issue
+server.tool(
+  "createJiraIssue",
+  "Create a new Jira issue (e.g. subtask, story, task). Description accepts markdown.",
+  {
+    projectKey: z.string().describe("Project key (e.g. PROJ)"),
+    issueTypeName: z.string().describe('Issue type name (e.g. "Sub-task", "Task", "Story")'),
+    summary: z.string().describe("Issue summary/title"),
+    description: z.string().optional().describe("Description in markdown"),
+    parentKey: z.string().optional().describe("Parent issue key for subtasks (e.g. PROJ-123)"),
+    labels: z.array(z.string()).optional().describe("Labels to apply"),
+  },
+  async ({ projectKey, issueTypeName, summary, description, parentKey, labels }) => {
+    try {
+      const fields = {
+        project: { key: projectKey },
+        issuetype: { name: issueTypeName },
+        summary,
+      };
+      if (description) fields.description = markdownToAdf(description);
+      if (parentKey) fields.parent = { key: parentKey };
+      if (labels?.length) fields.labels = labels;
+      const res = await jira("POST", "/rest/api/3/issue", { fields });
+      return ok({ success: true, key: res.key, id: res.id });
+    } catch (e) {
+      return err(e.message);
+    }
+  }
+);
+
+// 9. Create remote link
 server.tool(
   "createRemoteLink",
   "Attach an external URL (e.g. GitHub PR) to a Jira issue",
