@@ -55,14 +55,14 @@ Proceed to Step 2b if CI is also failing, otherwise skip to Step 3.
 
 1. **Get the failed check runs:**
    ```bash
-   gh pr checks <number> --json name,state,conclusion,detailsUrl --jq '[.[] | select(.conclusion == "FAILURE")]'
+   gh pr checks <number> --json name,state,link --jq '[.[] | select(.state == "FAILURE")]'
    ```
 
 2. **Read the CI logs** for each failed check:
    ```bash
    gh run view <run_id> --log-failed
    ```
-   (Extract the run ID from the detailsUrl — it's the number in `/runs/<run_id>/`.)
+   (Extract the run ID from the link — it's the number in `/runs/<run_id>/`.)
 
 3. **Diagnose and fix** the build/test errors. Common causes: type errors, missing imports, lint failures, test failures.
 
@@ -163,6 +163,14 @@ For each piece of feedback you addressed in Step 3:
 
 If a comment is unclear or you cannot address it, reply explaining why instead of silently skipping it.
 
-## 6. Done
+## 6. Re-request Review
+
+Re-request review from all reviewers who left feedback so they're notified:
+```bash
+gh pr edit <number> --add-reviewer <reviewer1>,<reviewer2>
+```
+Extract reviewer logins from the reviews fetched in Step 3. Exclude your own login.
+
+## 7. Done
 
 Output `<promise>COMPLETE</promise>` — one PR has been fixed per iteration.
