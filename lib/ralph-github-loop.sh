@@ -248,7 +248,7 @@ ralph_github_loop() {
     [[ -z "$LOOP_TASK_KEY" ]] && return 1
     local pr_count
     pr_count=$(loop_count_work)
-    LOOP_TASK_DISPLAY="PRs: $pr_count"
+    LOOP_TASK_DISPLAY="PR #$LOOP_TASK_KEY ($pr_count queued)"
     return 0
   }
 
