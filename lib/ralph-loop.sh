@@ -283,6 +283,16 @@ PROMPT_EOF
       consecutive_empty=0
     fi
 
+    # Launch reflect in background before cleaning up tmpfile
+    local reflect_pid=""
+    if [[ -s "$tmpfile" ]]; then
+      local reflect_input
+      reflect_input=$(mktemp)
+      cp "$tmpfile" "$reflect_input"
+      ( ralph_reflect "$agent_key" "$instance_num" "$reflect_input"; rm -f "$reflect_input" ) &
+      reflect_pid=$!
+    fi
+
     rm -f "$tmpfile"
     tmpfile=""
 
@@ -294,6 +304,12 @@ PROMPT_EOF
     if [[ "$max_iterations" -gt 0 && "$iteration" -ge "$max_iterations" ]]; then
       ralph_log "Iteration complete. Exiting ($iteration/$max_iterations iterations)."
       exit 0
+    fi
+
+    # Wait for reflect to finish so learnings are ready for next iteration
+    if [[ -n "$reflect_pid" ]]; then
+      wait $reflect_pid 2>/dev/null || true
+      reflect_pid=""
     fi
 
     ralph_log "Iteration complete. Cooldown ${poll_interval}s..."

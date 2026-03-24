@@ -87,6 +87,16 @@ $(cat "$provider_instructions")"
     full_system_prompt="$(cat "$prompt_file")"
   fi
 
+  # Inject learnings from past iterations if available
+  local learnings_file
+  learnings_file=$(ralph_get_learnings_file "$agent_key")
+  if [[ -f "$learnings_file" && -s "$learnings_file" ]]; then
+    full_system_prompt="$full_system_prompt
+
+# LEARNINGS FROM PAST ITERATIONS
+$(cat "$learnings_file")"
+  fi
+
   case "$agent_cli" in
     claude)
       local model
