@@ -22,7 +22,7 @@ ralph_fetch_fixer_prs() {
   local graphql_prs
   graphql_prs=$(gh api graphql -f query="
     {
-      search(query: \"is:pr is:open author:@me repo:$repo\", type: ISSUE, first: 50) {
+      search(query: \"is:pr is:open author:@me repo:$repo -label:blocked\", type: ISSUE, first: 50) {
         nodes {
           ... on PullRequest {
             number
@@ -31,6 +31,7 @@ ralph_fetch_fixer_prs() {
             headRefName
             isDraft
             mergeable
+            reviewDecision
             reviewThreads(first: 100) {
               nodes { isResolved }
             }
@@ -67,9 +68,13 @@ ralph_fetch_fixer_prs() {
         hasCIFailure: (
           [.commits.nodes[0].commit.statusCheckRollup.contexts.nodes[] |
             select((.conclusion // null) == "FAILURE")] | length > 0
-        )
+        ),
+        isAwaitingReview: (.reviewDecision == "REVIEW_REQUIRED")
       } as $flags |
-      select($flags.hasUnresolvedThreads or $flags.hasConflicts or $flags.hasChangesRequested or $flags.hasCIFailure) |
+      select(
+        ($flags.hasUnresolvedThreads or $flags.hasConflicts or $flags.hasChangesRequested or $flags.hasCIFailure)
+        and ($flags.isAwaitingReview | not)
+      ) |
       {number, title, url, headRefName, hasConflicts: $flags.hasConflicts, hasCIFailure: $flags.hasCIFailure}
     ]' 2>/dev/null) || graphql_prs="[]"
 
@@ -80,17 +85,15 @@ ralph_fetch_fixer_prs() {
 ralph_fetch_github_prs() { ralph_fetch_fixer_prs; }
 
 ralph_fetch_mergeable_prs() {
-  local repo label
+  local repo
   repo=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null) || repo=""
   if [[ -z "$repo" ]]; then
     echo "[]"
     return
   fi
-  label="${RALPH_MERGE_LABEL:-ready-to-merge}"
-
   gh api graphql -f query="
     {
-      search(query: \"is:pr is:open author:@me label:\\\"$label\\\" repo:$repo\", type: ISSUE, first: 50) {
+      search(query: \"is:pr is:open author:@me repo:$repo -label:blocked\", type: ISSUE, first: 50) {
         nodes {
           ... on PullRequest {
             number
@@ -100,6 +103,7 @@ ralph_fetch_mergeable_prs() {
             baseRefName
             isDraft
             mergeable
+            reviewDecision
             reviewThreads(first: 100) {
               nodes { isResolved }
             }
@@ -124,6 +128,7 @@ ralph_fetch_mergeable_prs() {
     }" --jq '[.data.search.nodes[] |
       select(.isDraft == false) |
       select(.mergeable == "MERGEABLE") |
+      select(.reviewDecision == "APPROVED") |
       select([.reviewThreads.nodes[] | select(.isResolved == false)] | length == 0) |
       (.commits.nodes[0].commit.statusCheckRollup) as $rollup |
       select($rollup.state == "SUCCESS") |

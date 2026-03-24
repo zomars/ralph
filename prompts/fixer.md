@@ -165,11 +165,14 @@ If a comment is unclear or you cannot address it, reply explaining why instead o
 
 ## 6. Re-request Review
 
-Re-request review from all reviewers who left feedback so they're notified:
+**Always re-request review before completing** — even if you made no code changes (e.g. unfixable infra CI failure). This signals the PR back to reviewers and prevents the fixer from re-picking it.
+
 ```bash
 gh pr edit <number> --add-reviewer <reviewer1>,<reviewer2>
 ```
 Extract reviewer logins from the reviews fetched in Step 3. Exclude your own login.
+
+If no reviewers have reviewed yet (no logins to re-request), add label `blocked` as a last resort to prevent looping, and leave a comment explaining why.
 
 ## 7. Done
 
