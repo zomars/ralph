@@ -99,6 +99,7 @@ provider_get_unresolved_blocker_keys() {
       jq -r '[
         .fields.issuelinks[]?
         | select(.type.inward == "is blocked by" and .inwardIssue)
+        | select(.inwardIssue.fields.issuetype.name != "Epic")
         | select(.inwardIssue.fields.status.statusCategory.key != "done")
         | .inwardIssue.key
       ] | join(" ")' "$issue_file"
@@ -153,6 +154,7 @@ provider_check_blockers() {
       blocked_count=$(jq '[
         .fields.issuelinks[]?
         | select(.type.inward == "is blocked by" and .inwardIssue)
+        | select(.inwardIssue.fields.issuetype.name != "Epic")
         | select(.inwardIssue.fields.status.statusCategory.key != "done")
       ] | length' "$issue_file")
       [[ "$blocked_count" -eq 0 ]]

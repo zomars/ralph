@@ -37,7 +37,22 @@ gh pr merge <number> --squash --delete-branch
 
 If merge fails → comment with reason.
 
-## 3. Transition Jira to Done
+## 3. Rebase Stacked PRs
+
+If the merged PR's branch (`headRefName`) was the base for other PRs (stacked PRs), update them:
+
+```bash
+# Find PRs that targeted the now-deleted branch
+CHILD_PRS=$(gh pr list --base "<headRefName>" --json number,headRefName --jq '.[].number')
+DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')
+for PR_NUM in $CHILD_PRS; do
+  gh pr edit "$PR_NUM" --base "$DEFAULT_BRANCH"
+done
+```
+
+If no child PRs exist, skip this step.
+
+## 4. Transition Jira to Done
 
 After a successful merge, transition the Jira issue:
 
@@ -55,6 +70,6 @@ If the merged issue has a parent (check `fields.parent`):
 2. If ALL subtasks are in "Done" status → transition the parent to **"Done"** and add comment: `"RALPH_MERGER: All subtasks complete. Closing parent."`
 3. If some subtasks remain open → do nothing to the parent.
 
-## 4. Done
+## 5. Done
 
 `<promise>COMPLETE</promise>`

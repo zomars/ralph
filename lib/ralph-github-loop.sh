@@ -69,13 +69,19 @@ ralph_fetch_fixer_prs() {
           [.commits.nodes[0].commit.statusCheckRollup.contexts.nodes[] |
             select((.conclusion // null) == "FAILURE")] | length > 0
         ),
-        isAwaitingReview: (.reviewDecision == "REVIEW_REQUIRED")
+        isAwaitingReview: (.reviewDecision == "REVIEW_REQUIRED"),
+        needsDismissal: (
+          (.reviewDecision == "CHANGES_REQUESTED") and
+          (.reviewThreads.nodes | map(select(.isResolved == false)) | length == 0) and
+          ((.commits.nodes[0].commit.committedDate // "1970-01-01T00:00:00Z") as $lastCommit |
+            [.latestReviews.nodes[] | select(.state == "CHANGES_REQUESTED" and .submittedAt > $lastCommit)] | length == 0)
+        )
       } as $flags |
       select(
-        ($flags.hasUnresolvedThreads or $flags.hasConflicts or $flags.hasChangesRequested or $flags.hasCIFailure)
+        ($flags.hasUnresolvedThreads or $flags.hasConflicts or $flags.hasChangesRequested or $flags.hasCIFailure or $flags.needsDismissal)
         and ($flags.isAwaitingReview | not)
       ) |
-      {number, title, url, headRefName, hasConflicts: $flags.hasConflicts, hasCIFailure: $flags.hasCIFailure}
+      {number, title, url, headRefName, hasConflicts: $flags.hasConflicts, hasCIFailure: $flags.hasCIFailure, needsDismissal: $flags.needsDismissal}
     ]' 2>/dev/null) || graphql_prs="[]"
 
   echo "$graphql_prs"
@@ -191,6 +197,65 @@ _ralph_github_no_work_label() {
   esac
 }
 
+# ─── Stuck review fixer (no Claude needed) ───────────────────────────────────
+
+_ralph_fix_stuck_review() {
+  local pr_number="$1"
+  local repo
+  repo=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null) || return 1
+  local owner="${repo%%/*}"
+  local name="${repo##*/}"
+
+  ralph_log "PR #$pr_number: reviewDecision stuck at CHANGES_REQUESTED — fixing directly"
+
+  # 1. Dismiss any CHANGES_REQUESTED reviews that still exist
+  local review_ids
+  review_ids=$(gh api "repos/$owner/$name/pulls/$pr_number/reviews" \
+    --jq '[.[] | select(.state == "CHANGES_REQUESTED") | .id]' 2>/dev/null) || review_ids="[]"
+
+  local dismissed=false
+  for rid in $(echo "$review_ids" | jq -r '.[]'); do
+    gh api -X PUT "repos/$owner/$name/pulls/$pr_number/reviews/$rid/dismissals" \
+      -f message="All feedback addressed, threads resolved" 2>/dev/null && dismissed=true
+  done
+
+  if [[ "$dismissed" == "true" ]]; then
+    ralph_log "PR #$pr_number: Dismissed stale reviews"
+    return 0
+  fi
+
+  # 2. No reviews to dismiss — push empty commit via API to force GitHub to re-evaluate reviewDecision
+  local head_sha
+  head_sha=$(gh api "repos/$owner/$name/pulls/$pr_number" --jq '.head.sha' 2>/dev/null) || head_sha=""
+  local head_ref
+  head_ref=$(gh api "repos/$owner/$name/pulls/$pr_number" --jq '.head.ref' 2>/dev/null) || head_ref=""
+  if [[ -n "$head_sha" && -n "$head_ref" ]]; then
+    ralph_log "PR #$pr_number: No dismissable reviews — pushing empty commit to reset reviewDecision"
+    # Create a new commit with same tree (empty commit) via Git API
+    local new_sha
+    local tree_sha
+    tree_sha=$(gh api "repos/$owner/$name/git/commits/$head_sha" --jq '.tree.sha' 2>/dev/null) || tree_sha=""
+    if [[ -n "$tree_sha" ]]; then
+      new_sha=$(gh api "repos/$owner/$name/git/commits" \
+        -f "message=chore: reset stale review state" \
+        -f "tree=$tree_sha" \
+        -f "parents[]=$head_sha" \
+        --jq '.sha' 2>/dev/null) || new_sha=""
+      if [[ -n "$new_sha" ]]; then
+        gh api -X PATCH "repos/$owner/$name/git/refs/heads/$head_ref" \
+          -f "sha=$new_sha" 2>/dev/null
+        ralph_log "PR #$pr_number: Empty commit pushed — reviewDecision should reset"
+        return 0
+      fi
+    fi
+  fi
+
+  # 3. Nothing worked — convert to draft to prevent looping
+  ralph_log "PR #$pr_number: Cannot fix stuck review — converting to draft"
+  gh pr ready "$pr_number" --undo 2>/dev/null
+  gh pr comment "$pr_number" -b "RALPH_FIXER: Converted to draft — reviewDecision stuck at CHANGES_REQUESTED with no dismissable reviews. Mark as ready for review after human intervention." 2>/dev/null
+}
+
 # ─── Loop entry points ───────────────────────────────────────────────────────
 
 ralph_github_loop_once() {
@@ -244,8 +309,19 @@ ralph_github_loop() {
 
   loop_pick_work() {
     # Pick the PR for this instance (1-indexed instance, 0-indexed array)
-    LOOP_TASK_KEY=$(jq -r ".[$((instance_num - 1))].number // empty" "$LOOP_WORK_FILE")
+    local idx=$(( instance_num - 1 ))
+    LOOP_TASK_KEY=$(jq -r ".[$idx].number // empty" "$LOOP_WORK_FILE")
     [[ -z "$LOOP_TASK_KEY" ]] && return 1
+
+    # Handle stuck reviewDecision directly — no need to invoke Claude
+    local needs_dismissal
+    needs_dismissal=$(jq -r ".[$idx].needsDismissal // false" "$LOOP_WORK_FILE")
+    if [[ "$needs_dismissal" == "true" ]]; then
+      _ralph_fix_stuck_review "$LOOP_TASK_KEY"
+      # Skip this iteration — let next poll see the updated state
+      return 1
+    fi
+
     local pr_count
     pr_count=$(loop_count_work)
     LOOP_TASK_DISPLAY="PR #$LOOP_TASK_KEY ($pr_count queued)"

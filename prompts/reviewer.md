@@ -71,10 +71,24 @@ Based on your analysis, choose ONE path:
 - **Create PR and approve**:
   ```bash
   DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')
-  gh pr create --base "$DEFAULT_BRANCH" --head "ralph/<TASK-KEY>" \
+  BASE_BRANCH="$DEFAULT_BRANCH"
+
+  # Stacked PRs: if this task has blockers, check if any blocker has an
+  # active branch on the remote. Target the blocker's branch instead of
+  # the default branch so changes stack correctly.
+  # Blocker keys are listed in the "Blocker Keys" section of the initial message.
+  for BLOCKER_KEY in <BLOCKER-KEYS>; do
+    if git ls-remote --heads origin "ralph/$BLOCKER_KEY" | grep -q .; then
+      BASE_BRANCH="ralph/$BLOCKER_KEY"
+      break
+    fi
+  done
+
+  gh pr create --base "$BASE_BRANCH" --head "ralph/<TASK-KEY>" \
     --title "<TASK-KEY>: <summary>" --body "Implements <TASK-KEY>"
   gh pr review "ralph/<TASK-KEY>" --approve
   ```
+  If the task has **no blockers**, use `$DEFAULT_BRANCH` as the base.
 - **Transition**: Keep status at **"In Review"** — the merger will move it to "Done" after merging.
 
 ## 5. Commit & Stop
