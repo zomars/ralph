@@ -224,33 +224,7 @@ _ralph_fix_stuck_review() {
     return 0
   fi
 
-  # 2. No reviews to dismiss — push empty commit via API to force GitHub to re-evaluate reviewDecision
-  local head_sha
-  head_sha=$(gh api "repos/$owner/$name/pulls/$pr_number" --jq '.head.sha' 2>/dev/null) || head_sha=""
-  local head_ref
-  head_ref=$(gh api "repos/$owner/$name/pulls/$pr_number" --jq '.head.ref' 2>/dev/null) || head_ref=""
-  if [[ -n "$head_sha" && -n "$head_ref" ]]; then
-    ralph_log "PR #$pr_number: No dismissable reviews — pushing empty commit to reset reviewDecision"
-    # Create a new commit with same tree (empty commit) via Git API
-    local new_sha
-    local tree_sha
-    tree_sha=$(gh api "repos/$owner/$name/git/commits/$head_sha" --jq '.tree.sha' 2>/dev/null) || tree_sha=""
-    if [[ -n "$tree_sha" ]]; then
-      new_sha=$(gh api "repos/$owner/$name/git/commits" \
-        -f "message=chore: reset stale review state" \
-        -f "tree=$tree_sha" \
-        -f "parents[]=$head_sha" \
-        --jq '.sha' 2>/dev/null) || new_sha=""
-      if [[ -n "$new_sha" ]]; then
-        gh api -X PATCH "repos/$owner/$name/git/refs/heads/$head_ref" \
-          -f "sha=$new_sha" 2>/dev/null
-        ralph_log "PR #$pr_number: Empty commit pushed — reviewDecision should reset"
-        return 0
-      fi
-    fi
-  fi
-
-  # 3. Nothing worked — convert to draft to prevent looping
+  # 2. Dismissal failed — convert to draft to prevent looping
   ralph_log "PR #$pr_number: Cannot fix stuck review — converting to draft"
   gh pr ready "$pr_number" --undo 2>/dev/null
   gh pr comment "$pr_number" -b "RALPH_FIXER: Converted to draft — reviewDecision stuck at CHANGES_REQUESTED with no dismissable reviews. Mark as ready for review after human intervention." 2>/dev/null
