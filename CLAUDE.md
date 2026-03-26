@@ -25,8 +25,8 @@ ralph config                    # Show current config
 
 ### Two Loop Types
 
-1. **Backlog-gated** (`lib/ralph-gated-loop.sh`) — polls a provider (Jira/Linear/GitHub Issues/GitHub Projects/file) for matching tasks. Used by: planner, implementer, reviewer, tester, refactor, documenter.
-2. **GitHub-gated** (`lib/ralph-github-loop.sh`) — polls for open PRs with unresolved review threads. Used by: fixer.
+1. **Backlog-gated** (`lib/ralph-gated-loop.sh`) — polls a provider for matching tasks. Used by: planner, implementer, reviewer, tester, refactor, documenter.
+2. **GitHub-gated** (`lib/ralph-github-loop.sh`) — polls for open PRs needing action. Used by: fixer, merger.
 
 Both loops: check for work → invoke `claude` with agent prompt + provider instructions → parse stream-json output → check for `<promise>COMPLETE</promise>` or `<promise>ABORT</promise>` → cooldown → repeat.
 
@@ -42,9 +42,17 @@ Each provider has 3 files:
 
 Adding a provider requires only these 3 files — no changes to core lib or bin wrappers.
 
-### PR Creation Flow
+### Agent Coordination
 
-PRs are created by the **reviewer**, not the implementer. This avoids wasting CI minutes on unapproved work — CI only runs on code the reviewer has approved. The implementer pushes branches (`ralph/<TASK-KEY>`); the reviewer, tester, and fixer check them out directly. The fixer agent activates only after the reviewer creates the PR, so it's naturally PR-gated.
+Agents never talk to each other. They coordinate through **Jira status transitions** and **labels** — the backlog is the message bus. Each agent's prompt (`prompts/*.md`) defines what it reads and writes; `routing.json` encodes the label/status filters that prevent conflicts.
+
+```
+Planner → Implementer → Reviewer ─┬─ reject → Implementer
+                                   ├─ needs-tests → Tester → Reviewer
+                                   └─ approve+PR → Fixer → Merger → Documenter
+```
+
+Key non-obvious rules: reviewer creates PRs (not implementer), merger auto-closes parents when all subtasks are Done, fixer dismisses stale reviews to re-enter the merge gate.
 
 ### Agent Prompts (`prompts/*.md`)
 
