@@ -69,6 +69,7 @@ ralph_fetch_fixer_prs() {
           [.commits.nodes[0].commit.statusCheckRollup.contexts.nodes[] |
             select((.conclusion // null) == "FAILURE")] | length > 0
         ),
+        hasChecksRunning: (.commits.nodes[0].commit.statusCheckRollup.state == "PENDING"),
         isAwaitingReview: (.reviewDecision == "REVIEW_REQUIRED"),
         needsDismissal: (
           (.reviewDecision == "CHANGES_REQUESTED") and
@@ -80,6 +81,7 @@ ralph_fetch_fixer_prs() {
       select(
         ($flags.hasUnresolvedThreads or $flags.hasConflicts or $flags.hasChangesRequested or $flags.hasCIFailure or $flags.needsDismissal)
         and ($flags.isAwaitingReview | not)
+        and ($flags.hasChecksRunning | not)
       ) |
       {number, title, url, headRefName, hasConflicts: $flags.hasConflicts, hasCIFailure: $flags.hasCIFailure, needsDismissal: $flags.needsDismissal}
     ]' 2>/dev/null) || graphql_prs="[]"
