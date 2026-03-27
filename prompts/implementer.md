@@ -260,7 +260,7 @@ All work for this task happens on the `ralph/<TASK-KEY>` branch.
    - **Primitive obsession** → Introduce value objects
    - **Existing code** the new code reveals as problematic
 
-   Run tests after each refactor step.
+   Run the affected tests after each refactor step. CI validates the full suite.
 
    ### Checklist Per Cycle
 
@@ -272,7 +272,7 @@ All work for this task happens on the `ralph/<TASK-KEY>` branch.
    [ ] No speculative features added
    ```
 
-6. **Verify with evidence**: After all TDD cycles, confirm your implementation works end-to-end:
+6. **Verify with evidence**: After all TDD cycles, confirm your implementation works. Only run the tests related to your changes — CI validates the full suite.
 
 | Task Type         | Verification Method                      |
 | ----------------- | ---------------------------------------- |
@@ -280,7 +280,7 @@ All work for this task happens on the `ralph/<TASK-KEY>` branch.
 | API endpoint      | `curl` or test showing request/response  |
 | Database schema   | Query showing table/column exists        |
 | TypeScript types  | `grep` showing type definition exists    |
-| Backend logic     | Unit/integration test passing            |
+| Backend logic     | Related tests passing                    |
 | Telemetry/logging | Test or code showing events are captured |
 | Performance       | Benchmark or timing measurement          |
 

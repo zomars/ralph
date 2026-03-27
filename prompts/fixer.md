@@ -163,16 +163,17 @@ For each piece of feedback you addressed in Step 3:
 
 If a comment is unclear or you cannot address it, reply explaining why instead of silently skipping it.
 
-## 6. Re-request Review
+## 6. Dismiss Reviews
 
-**Always re-request review before completing** — even if you made no code changes (e.g. unfixable infra CI failure). This signals the PR back to reviewers and prevents the fixer from re-picking it.
+**Always dismiss CHANGES_REQUESTED reviews before completing** — this clears the review state and prevents the fixer from re-picking the PR.
 
 ```bash
-gh pr edit <number> --add-reviewer <reviewer1>,<reviewer2>
+gh api repos/{owner}/{repo}/pulls/{number}/reviews --jq '.[] | select(.state == "CHANGES_REQUESTED") | .id' | while read -r rid; do
+  gh api -X PUT "repos/{owner}/{repo}/pulls/{number}/reviews/${rid}/dismissals" -f message="All feedback addressed"
+done
 ```
-Extract reviewer logins from the reviews fetched in Step 3. Exclude your own login.
 
-If no reviewers have reviewed yet (no logins to re-request), add label `blocked` as a last resort to prevent looping, and leave a comment explaining why.
+If dismissal fails (e.g. branch protection prevents it), add label `blocked` and leave a comment explaining why.
 
 ## 7. Done
 
