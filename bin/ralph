@@ -25,6 +25,10 @@ GitHub commands:
   fixer             Run the Fixer agent (responds to PR review feedback)
   merger            Run the Merger agent (auto-merges approved PRs)
 
+Direct invocation:
+  run <agent> <key> Run an agent on a specific task, bypassing backlog query
+                    e.g. ralph run planner PRODUCT-711
+
 Agent options:
   <N>               Run exactly N iterations, then exit (e.g. ralph planner 10)
   --once            Run a single iteration, then exit (shorthand for 1)
@@ -248,6 +252,106 @@ agent_display_name() {
     fixer)        echo "Fixer" ;;
     merger)       echo "Merger" ;;
   esac
+}
+
+cmd_run() {
+  local agent_key="${1:-}"
+  local task_key="${2:-}"
+
+  if [[ -z "$agent_key" || -z "$task_key" ]]; then
+    echo "Usage: ralph run <agent> <task-key>"
+    echo "  e.g. ralph run planner PRODUCT-711"
+    echo "       ralph run implementer https://hihank.atlassian.net/browse/PRODUCT-711"
+    exit 1
+  fi
+
+  # Validate agent name
+  local agent_name
+  agent_name=$(agent_display_name "$agent_key")
+  if [[ -z "$agent_name" ]]; then
+    echo "Unknown agent: $agent_key"
+    exit 1
+  fi
+
+  # Accept full Jira URL or bare key
+  if [[ "$task_key" == http* ]]; then
+    task_key="${task_key##*/}"
+  fi
+
+  # Load provider
+  ralph_load_provider
+  ralph_validate_env $PROVIDER_ENV_VARS
+
+  # Fetch the specific task
+  local task_file
+  task_file=$(mktemp)
+  local work_file
+  work_file=$(mktemp)
+  provider_fetch_tasks "key = \"$task_key\"" 1 > "$work_file"
+
+  local task_count
+  task_count=$(jq '.issues | length' "$work_file")
+  if (( task_count == 0 )); then
+    ralph_error "Task $task_key not found in Jira."
+    rm -f "$task_file" "$work_file"
+    exit 1
+  fi
+  jq '.issues[0]' "$work_file" > "$task_file"
+  rm -f "$work_file"
+
+  # Build system prompt
+  local prompt_file provider_instructions
+  prompt_file="$(ralph_get_prompt "$agent_key")"
+  provider_instructions="$(ralph_get_provider_instructions)"
+
+  if [[ ! -f "$prompt_file" ]]; then
+    ralph_error "Prompt not found: $prompt_file"
+    rm -f "$task_file"
+    exit 1
+  fi
+
+  local full_system_prompt
+  full_system_prompt="$(cat "$prompt_file")"
+  if [[ -f "$provider_instructions" ]]; then
+    full_system_prompt="$full_system_prompt
+
+$(cat "$provider_instructions")"
+  fi
+
+  # Append learnings if available
+  local learnings_file
+  learnings_file=$(ralph_get_learnings_file "$agent_key")
+  if [[ -f "$learnings_file" && -s "$learnings_file" ]]; then
+    full_system_prompt="$full_system_prompt
+
+# LEARNINGS FROM PAST ITERATIONS
+$(cat "$learnings_file")"
+  fi
+
+  # Build initial message with task context
+  local task_kb
+  task_kb=$(provider_render_kb "$task_file")
+  rm -f "$task_file"
+
+  local initial_message="You are RALPH_${(U)agent_key} (interactive). Your working directory is: $(pwd).
+
+$task_kb
+
+Execute your workflow now. Start with Step 1."
+
+  # Resolve model
+  local model
+  model=$(ralph_resolve_model "$agent_key")
+  ralph_log "Running $agent_name on $task_key (model: $model, interactive)"
+
+  # Launch Claude interactively (no --print, no stream-json)
+  exec claude \
+    --verbose \
+    --model "$model" \
+    --max-turns 100 \
+    --dangerously-skip-permissions \
+    --append-system-prompt "$full_system_prompt" \
+    "$initial_message"
 }
 
 cmd_agent() {
@@ -591,6 +695,7 @@ case "$subcmd" in
   debug)              cmd_debug "$@" ;;
   version|-v)         cmd_version ;;
   help|--help|-h|"")  usage ;;
+  run)                cmd_run "$@" ;;
   validate)           exec "$RALPH_HOME/bin/validate-routing-impl" "$@" ;;
   watchdog)            cmd_watchdog "$@" ;;
   planner|implementer|reviewer|tester|refactor|documenter)
