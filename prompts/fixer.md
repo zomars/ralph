@@ -64,7 +64,7 @@ Proceed to Step 2b if CI is also failing, otherwise skip to Step 3.
    ```
    (Extract the run ID from the link — it's the number in `/runs/<run_id>/`.)
 
-3. **Diagnose and fix** the build/test errors. Common causes: type errors, missing imports, lint failures, test failures.
+3. **Diagnose and fix** the errors shown in CI logs. Common causes: type errors, missing imports, lint failures, test failures. Push the fix and let CI re-validate.
 
 4. After fixing, proceed to Step 3 — always check for review feedback too.
 

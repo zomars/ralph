@@ -286,9 +286,7 @@ All work for this task happens on the `ralph/<TASK-KEY>` branch.
 
 Run the dev server if needed (check the worktree setup output for the correct command).
 
-7. **Run full test suite**: Run `npm run test` before committing. If blocked by a genuine blocker (build failures, missing dependencies, failing tests):
-   1. **Check for prior ABORTs**: Read the task comments. If there is already a `RALPH_IMPLEMENTER ABORT:` comment on this task, add label `ralph-failed` instead of `needs-planning` and add comment: `"RALPH_IMPLEMENTER: Failed twice, needs human attention."` Then output `<promise>ABORT</promise>`.
-   2. **First ABORT**: Add label `needs-planning` to the task. Add comment: `"RALPH_IMPLEMENTER ABORT: <concrete reason with file paths/error messages>"`. Then output `<promise>ABORT</promise>`.
+7. **Commit your changes** — CI and git hooks validate builds and tests. If a pre-commit hook rejects the commit, fix the issue and retry.
 
 **Subtask awareness**: If the task has a parent (shown in KB as `Parent: PROJ-123`), read the parent's description for architectural decisions and overall context before starting work. The parent description contains the high-level plan; your subtask is one vertical slice of it.
 
