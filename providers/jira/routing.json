@@ -51,6 +51,7 @@
         "labels_include": null,
         "labels_exclude": ["needs-planning", "needs-tests", "tech-debt", "needs-input", "ready-to-merge"],
         "description_condition": null,
+        "exclude_blocked": true,
         "order_by": "priority_desc"
       },
       "script": "bin/afk-reviewer",

@@ -23,7 +23,9 @@
         "status_in": ["Todo", "In Progress"],
         "labels_include": null,
         "labels_exclude": ["needs-input", "needs-tests", "tech-debt", "ralph-blocked", "ralph-failed", "documented"],
-        "description_condition": "empty_or_todo_or_label_needs_planning"
+        "description_condition": "empty_or_todo_or_label_needs_planning",
+        "exclude_blocked": true,
+        "blocker_check": "no_needs_planning"
       },
       "script": "bin/afk-planner",
       "prompt": "prompts/planner.md"
@@ -46,7 +48,8 @@
         "status_in": ["In Review"],
         "labels_include": null,
         "labels_exclude": ["needs-planning", "needs-tests", "tech-debt", "needs-input", "ready-to-merge"],
-        "description_condition": null
+        "description_condition": null,
+        "exclude_blocked": true
       },
       "script": "bin/afk-reviewer",
       "prompt": "prompts/reviewer.md"

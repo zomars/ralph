@@ -657,11 +657,65 @@ check_loops() {
     echo "  WARNING: No agents define adds_labels. Add this field to enable self-loop detection."
   fi
 
+  # ─── 3. Blocked-parent safety ──────────────────────────────────────────
+  # Agents that share statuses where both parents and subtasks can coexist
+  # must have exclude_blocked to avoid picking a parent while its subtasks
+  # are still in-flight. The planner creates "subtask blocks parent" links,
+  # so exclude_blocked + _traverse_blockers ensures subtasks are processed first.
+
+  echo ""
+  echo "  Checking exclude_blocked on agents that can see parent tasks..."
+  echo ""
+
+  # Statuses where subtasks and their parent can coexist (implementer and reviewer
+  # both operate in these statuses; the planner chains subtasks so the parent stays
+  # blocked until all children complete).
+  local coexist_statuses=("In Progress" "In Review")
+
+  for agent in $(get_agents); do
+    local agent_statuses
+    agent_statuses=$(jq -r ".agents.${agent}.rules.status_in // [] | .[]" "$ROUTING_JSON")
+
+    local overlaps_coexist=0
+    local cs
+    for cs in "${coexist_statuses[@]}"; do
+      if echo "$agent_statuses" | grep -qx "$cs"; then
+        overlaps_coexist=1
+        break
+      fi
+    done
+
+    if [ "$overlaps_coexist" -eq 0 ]; then
+      continue
+    fi
+
+    # Agent can see statuses where parent+subtask coexist — check for exclude_blocked
+    local has_exclude_blocked
+    has_exclude_blocked=$(jq -r ".agents.${agent}.rules.exclude_blocked // false" "$ROUTING_JSON")
+
+    if [ "$has_exclude_blocked" = "true" ]; then
+      echo "  $agent (sees parent+subtask statuses): OK — has exclude_blocked"
+    else
+      # Agents that require a specific label (labels_include) are safe —
+      # they only match tasks explicitly labeled, not arbitrary parents.
+      local has_labels_include
+      has_labels_include=$(jq -r ".agents.${agent}.rules.labels_include // null" "$ROUTING_JSON")
+      if [ "$has_labels_include" != "null" ]; then
+        echo "  $agent (sees parent+subtask statuses): OK — gated by labels_include"
+      else
+        echo "  $agent (sees parent+subtask statuses): FAIL — missing exclude_blocked"
+        echo "    Without exclude_blocked, this agent can pick a parent task while its"
+        echo "    subtasks are still in-flight, skipping dependency ordering."
+        exit_code=1
+      fi
+    fi
+  done
+
   echo ""
   if [ "$exit_code" -eq 0 ]; then
-    echo "PASS: No global-exclude violations detected."
+    echo "PASS: No global-exclude or blocked-parent violations detected."
   else
-    echo "FAIL: Global-exclude violations found. Every agent must exclude all global_label_excludes labels."
+    echo "FAIL: Routing safety violations found."
   fi
 
   return $exit_code
