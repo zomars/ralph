@@ -16,8 +16,8 @@ _jira_adf_to_md() {
 PROVIDER_ENV_VARS=(JIRA_EMAIL JIRA_API_TOKEN JIRA_BASE_URL)
 
 # MCP server required by this provider
-PROVIDER_MCP_NAME=jira
-PROVIDER_MCP_CMD=ralph-jira-mcp
+PROVIDER_MCP_NAME=ralph
+PROVIDER_MCP_CMD=ralph-mcp
 
 # Fetch full task data for the given query
 # Args: $1 = JQL query string, $2 = max results (default 10)

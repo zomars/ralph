@@ -58,8 +58,8 @@ ralph_setup_worktree() {
     || echo '{}' > "$RALPH_WORKTREE_DIR/.mcp.json"
 
   if [[ -n "${PROVIDER_MCP_NAME:-}" ]] && command -v "${PROVIDER_MCP_CMD:-}" &>/dev/null; then
-    jq --arg n "$PROVIDER_MCP_NAME" --arg c "$PROVIDER_MCP_CMD" \
-      '.mcpServers[$n] = {"command": $c}' "$RALPH_WORKTREE_DIR/.mcp.json" \
+    jq --arg n "$PROVIDER_MCP_NAME" --arg c "$PROVIDER_MCP_CMD" --arg agent "$agent_key" \
+      '.mcpServers[$n] = {"command": $c, "env": {"RALPH_AGENT_KEY": $agent}}' "$RALPH_WORKTREE_DIR/.mcp.json" \
       > "$RALPH_WORKTREE_DIR/.mcp.json.tmp" && mv "$RALPH_WORKTREE_DIR/.mcp.json.tmp" "$RALPH_WORKTREE_DIR/.mcp.json"
   fi
 

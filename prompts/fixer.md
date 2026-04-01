@@ -72,48 +72,11 @@ Proceed to Step 2b if CI is also failing, otherwise skip to Step 3.
 
 ## 3. Read & Address Feedback
 
-1. **Read all review comments:**
-   ```bash
-   gh api repos/{owner}/{repo}/pulls/{number}/comments --jq '.[] | {id, path, line, body, user: .user.login, in_reply_to_id}'
-   ```
+1. **Get all feedback** using the `ralph_fixer_get_feedback` tool with the PR number. It returns all unresolved review threads (with thread IDs, comment IDs, paths, lines) and top-level reviews in a single call. Already filtered to unresolved only.
 
-2. **Read review threads with resolution status:**
-   ```bash
-   gh api graphql -f query='
-   {
-     repository(owner: "{owner}", name: "{repo}") {
-       pullRequest(number: {number}) {
-         reviewThreads(first: 50) {
-           nodes {
-             id
-             isResolved
-             line
-             path
-             comments(first: 10) {
-               nodes {
-                 id
-                 body
-                 author { login }
-               }
-             }
-           }
-         }
-       }
-     }
-   }
-   '
-   ```
+2. If there is no unresolved feedback → skip to Step 4.
 
-3. **Read PR-level reviews** (for top-level review body text):
-   ```bash
-   gh api repos/{owner}/{repo}/pulls/{number}/reviews --jq '.[] | {id, state, body, user: .user.login}'
-   ```
-
-4. Filter to only **unresolved** threads and unanswered comments. Ignore threads already resolved or that you authored.
-
-5. If there is no unresolved feedback → skip to Step 4.
-
-6. For each unresolved review comment/thread:
+3. For each unresolved review comment/thread:
    1. **Read** the file at the mentioned path and line
    2. **Understand** what the reviewer is asking for
    3. **Make the change** — edit the file to address the feedback
@@ -145,35 +108,13 @@ Work through ALL unresolved feedback before moving to the next step.
 
 ## 5. Reply & Resolve
 
-For each piece of feedback you addressed in Step 3:
-
-1. **Reply to the comment** explaining what you changed:
-   ```bash
-   gh api repos/{owner}/{repo}/pulls/{number}/comments/{comment_id}/replies -f body="Fixed — <brief explanation of what was changed>"
-   ```
-
-2. **Resolve the thread** via GraphQL:
-   ```bash
-   gh api graphql -f query='
-   mutation {
-     resolveReviewThread(input: {threadId: "<thread_id>"}) {
-       thread { isResolved }
-     }
-   }
-   '
-   ```
+For each piece of feedback you addressed in Step 3, use the `ralph_fixer_reply_and_resolve` tool with the PR number, comment ID (databaseId), thread ID (GraphQL node ID), and a reply explaining what you changed.
 
 If a comment is unclear or you cannot address it, reply explaining why instead of silently skipping it.
 
 ## 6. Dismiss Reviews
 
-**Always dismiss CHANGES_REQUESTED reviews before completing** — this clears the review state and prevents the fixer from re-picking the PR.
-
-```bash
-gh api repos/{owner}/{repo}/pulls/{number}/reviews --jq '.[] | select(.state == "CHANGES_REQUESTED") | .id' | while read -r rid; do
-  gh api -X PUT "repos/{owner}/{repo}/pulls/{number}/reviews/${rid}/dismissals" -f message="All feedback addressed"
-done
-```
+**Always dismiss CHANGES_REQUESTED reviews before completing** — use the `ralph_fixer_dismiss_reviews` tool with the PR number. This clears the review state and prevents the fixer from re-picking the PR.
 
 If dismissal fails (e.g. branch protection prevents it), add label `blocked` and leave a comment explaining why.
 

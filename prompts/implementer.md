@@ -317,33 +317,16 @@ RALPH: <what you did> (<TASK-KEY>)
 Evidence: <brief description of verification performed>
 ```
 
-After committing, push the branch and create a **draft PR**:
+After committing, push the branch and create a draft PR using the `ralph_implementer_create_pr` tool:
 
 ```bash
 git push -u origin "ralph/<TASK-KEY>"
-
-DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')
-BASE_BRANCH="$DEFAULT_BRANCH"
-
-# Stacked PRs: if this task has blockers, check if any blocker has an
-# active branch on the remote. Target the blocker's branch instead of
-# the default branch so changes stack correctly.
-# Blocker keys are listed in the "Blocker Keys" section of the initial message.
-for BLOCKER_KEY in <BLOCKER-KEYS>; do
-  if git ls-remote --heads origin "ralph/$BLOCKER_KEY" | grep -q .; then
-    BASE_BRANCH="ralph/$BLOCKER_KEY"
-    break
-  fi
-done
-
-# Only create if no PR exists yet (idempotent for "In Progress" continuations)
-if ! gh pr view "ralph/<TASK-KEY>" --json number &>/dev/null; then
-  gh pr create --draft --base "$BASE_BRANCH" --head "ralph/<TASK-KEY>" \
-    --title "<TASK-KEY>: <summary>" --body "Implements <TASK-KEY>"
-fi
 ```
 
-If the task has **no blockers**, use `$DEFAULT_BRANCH` as the base.
+Then call `ralph_implementer_create_pr` with your task key. The tool automatically:
+- Creates the PR as **draft** (enforced — cannot be overridden)
+- Detects the correct base branch from Jira blocker links (stacked PRs)
+- Is idempotent (returns existing PR if one exists)
 
 ### Release the branch
 

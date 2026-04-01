@@ -56,18 +56,18 @@ If the code passes review but the task has unresolved blockers (see **Blocker Ke
 
 ### Path A: REJECT (Logic/Tests Failed)
 
-- **Action**: Comment on the task explaining _exactly_ what failed.
-- **Transition**: Move status back to **"In Progress"**.
-- **Jira Label**: (Optional) If it was a build error, read current labels from the issue, append `ralph-failed`, and update via `editJiraIssue` with the full label list as `{"labels": ["label1", "label2"]}`.
+Use the `ralph_reviewer_reject` tool with the task key and a reason explaining exactly what failed. Set `isBuildError: true` if it was a build error.
+
+The tool automatically: adds a comment, transitions to "In Progress", and optionally adds `ralph-failed` label.
 
 ### Path B: NEEDS TESTING (No Evidence of Browser Testing)
 
-- **Action**: Comment with **specific testing guidance** for the Tester agent. The comment MUST include:
+Use the `ralph_reviewer_needs_tests` tool with the task key and specific testing guidance. The guidance MUST include:
   1. Which acceptance criteria lack evidence
   2. What constitutes acceptable evidence for each (e.g. "Screenshot of upload returning 201 with file_path in response", "Screenshot showing radon alert triggered for reading > 4.0 pCi/L", "API response showing structured_data matches the extraction schema")
   3. Any edge cases the tester should cover based on the PRD
-- **Jira Label**: Read current labels from the issue, append `needs-tests`, and update via `editJiraIssue` with the full label list as `{"labels": ["label1", "needs-tests"]}`.
-- **Transition**: Move status to **"To Do"**. (This hands off to the Tester Agent).
+
+The tool automatically: adds the comment, adds `needs-tests` label, and transitions to "To Do".
 
 ### Path D: CODE APPROVED, BLOCKED (Dependencies Not Done)
 
@@ -81,29 +81,10 @@ If the code passes review but the task has unresolved blockers (see **Blocker Ke
 
 - **Precondition**: Tests pass, code is clean, AND a test report with screenshots exists that adequately covers the ticket's acceptance criteria.
 - **Action**: Comment "Verified. Tests passed. Browser testing evidence confirmed. Code looks good."
-- **Jira Label**: Read current labels from the issue, remove `code-approved` if present, append `ready-to-merge`, and update via `editJiraIssue` with the full label list as `{"labels": ["label1", "ready-to-merge"]}`. This prevents the reviewer from re-picking this task.
-- **Undraft and approve the PR**:
-  ```bash
-  # Check if a draft PR exists for this branch
-  if gh pr view "ralph/<TASK-KEY>" --json number &>/dev/null; then
-    gh pr ready "ralph/<TASK-KEY>"
-    gh pr review "ralph/<TASK-KEY>" --approve
-  else
-    # Fallback: implementer failed to create draft PR — create a ready PR
-    DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')
-    BASE_BRANCH="$DEFAULT_BRANCH"
-    for BLOCKER_KEY in <BLOCKER-KEYS>; do
-      if git ls-remote --heads origin "ralph/$BLOCKER_KEY" | grep -q .; then
-        BASE_BRANCH="ralph/$BLOCKER_KEY"
-        break
-      fi
-    done
-    gh pr create --base "$BASE_BRANCH" --head "ralph/<TASK-KEY>" \
-      --title "<TASK-KEY>: <summary>" --body "Implements <TASK-KEY>"
-    gh pr review "ralph/<TASK-KEY>" --approve
-  fi
-  ```
-  If the implementer didn't create a draft PR (edge case), the fallback creates a ready PR directly.
+- **Approve**: Use the `ralph_reviewer_approve` tool with the task key.
+
+The tool automatically: undrafts the PR, approves it, removes `code-approved` label, adds `ready-to-merge` label. If no PR exists (edge case), creates one and approves it.
+
 - **Transition**: Keep status at **"In Review"** — the merger will move it to "Done" after merging.
 
 ## 5. Commit & Stop
