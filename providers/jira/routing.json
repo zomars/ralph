@@ -1,9 +1,10 @@
 {
   "statuses": ["To Do", "In Progress", "In Review", "Done"],
   "pr_convention": {
-    "description": "PRs are created by the reviewer only upon approval. Implementer pushes branches only.",
-    "created_by": "reviewer→approve (Path C)",
-    "created_as": "ready"
+    "description": "Draft PRs created by implementer. Reviewer undrafts on approval (Path C).",
+    "created_by": "implementer→push (Section 5)",
+    "created_as": "draft",
+    "undrafted_by": "reviewer→approve (Path C)"
   },
   "labels": [
     "needs-planning",
@@ -13,7 +14,8 @@
     "ralph-failed",
     "needs-input",
     "documented",
-    "ready-to-merge"
+    "ready-to-merge",
+    "code-approved"
   ],
   "global_label_excludes": ["needs-input"],
   "agents": {
@@ -45,13 +47,14 @@
       "prompt": "prompts/implementer.md"
     },
     "reviewer": {
-      "adds_labels": ["ralph-failed", "needs-tests", "tech-debt", "ready-to-merge"],
+      "adds_labels": ["ralph-failed", "needs-tests", "tech-debt", "ready-to-merge", "code-approved"],
       "rules": {
         "status_in": ["In Review"],
         "labels_include": null,
         "labels_exclude": ["needs-planning", "needs-tests", "tech-debt", "needs-input", "ready-to-merge"],
         "description_condition": null,
-        "exclude_blocked": true,
+        "exclude_blocked": false,
+        "gate_label": "code-approved",
         "order_by": "priority_desc"
       },
       "script": "bin/afk-reviewer",

@@ -24,6 +24,11 @@ The task has been pre-selected and dependency-validated by the guard. The initia
 
 ## 3. Review the Task
 
+**Fast-track check**: If the task already has the `code-approved` label, the code was reviewed in a prior iteration (it was blocked by dependencies at the time). Skip the full review:
+1. Checkout the branch and run tests (Step 3.2–3.3 below).
+2. Tests pass → go directly to **Path C** (remove `code-approved` when adding `ready-to-merge`).
+3. Tests fail → remove `code-approved` label, go to **Path A** (reject back to implementer).
+
 **Goal**: Verify the implementation is correct, clean, and has been properly tested with evidence.
 
 1.  **Explore the project**: Before reviewing, explore the repo to understand its architecture and conventions. Look at the root directory, read any docs or guides you find.
@@ -46,7 +51,8 @@ The task has been pre-selected and dependency-validated by the guard. The initia
 
 ## 4. Decide & Transition
 
-Based on your analysis, choose ONE path:
+Based on your analysis, choose ONE path.
+If the code passes review but the task has unresolved blockers (see **Blocker Keys** in the initial message), use **Path D** instead of Path C:
 
 ### Path A: REJECT (Logic/Tests Failed)
 
@@ -63,32 +69,41 @@ Based on your analysis, choose ONE path:
 - **Jira Label**: Read current labels from the issue, append `needs-tests`, and update via `editJiraIssue` with the full label list as `{"labels": ["label1", "needs-tests"]}`.
 - **Transition**: Move status to **"To Do"**. (This hands off to the Tester Agent).
 
+### Path D: CODE APPROVED, BLOCKED (Dependencies Not Done)
+
+- **Precondition**: Tests pass, code is clean, test evidence exists, BUT the task has unresolved "is blocked by" links (check the **Blocker Keys** section in the initial message — if any blocker is not Done, blockers are unresolved).
+- **Action**: Comment with your review results + "Code approved. Pending blocker resolution: <BLOCKER-KEYS>. Will auto-approve once blockers reach Done."
+- **Jira Label**: Read current labels from the issue, append `code-approved`, and update via `editJiraIssue` with the full label list as `{"labels": ["label1", "code-approved"]}`.
+- **Transition**: Keep status at **"In Review"**.
+- Output `<promise>COMPLETE</promise>`.
+
 ### Path C: APPROVE (Good to Go)
 
 - **Precondition**: Tests pass, code is clean, AND a test report with screenshots exists that adequately covers the ticket's acceptance criteria.
 - **Action**: Comment "Verified. Tests passed. Browser testing evidence confirmed. Code looks good."
-- **Jira Label**: Read current labels from the issue, append `ready-to-merge`, and update via `editJiraIssue` with the full label list as `{"labels": ["label1", "ready-to-merge"]}`. This prevents the reviewer from re-picking this task.
-- **Create PR and approve**:
+- **Jira Label**: Read current labels from the issue, remove `code-approved` if present, append `ready-to-merge`, and update via `editJiraIssue` with the full label list as `{"labels": ["label1", "ready-to-merge"]}`. This prevents the reviewer from re-picking this task.
+- **Undraft and approve the PR**:
   ```bash
-  DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')
-  BASE_BRANCH="$DEFAULT_BRANCH"
-
-  # Stacked PRs: if this task has blockers, check if any blocker has an
-  # active branch on the remote. Target the blocker's branch instead of
-  # the default branch so changes stack correctly.
-  # Blocker keys are listed in the "Blocker Keys" section of the initial message.
-  for BLOCKER_KEY in <BLOCKER-KEYS>; do
-    if git ls-remote --heads origin "ralph/$BLOCKER_KEY" | grep -q .; then
-      BASE_BRANCH="ralph/$BLOCKER_KEY"
-      break
-    fi
-  done
-
-  gh pr create --base "$BASE_BRANCH" --head "ralph/<TASK-KEY>" \
-    --title "<TASK-KEY>: <summary>" --body "Implements <TASK-KEY>"
-  gh pr review "ralph/<TASK-KEY>" --approve
+  # Check if a draft PR exists for this branch
+  if gh pr view "ralph/<TASK-KEY>" --json number &>/dev/null; then
+    gh pr ready "ralph/<TASK-KEY>"
+    gh pr review "ralph/<TASK-KEY>" --approve
+  else
+    # Fallback: implementer failed to create draft PR — create a ready PR
+    DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')
+    BASE_BRANCH="$DEFAULT_BRANCH"
+    for BLOCKER_KEY in <BLOCKER-KEYS>; do
+      if git ls-remote --heads origin "ralph/$BLOCKER_KEY" | grep -q .; then
+        BASE_BRANCH="ralph/$BLOCKER_KEY"
+        break
+      fi
+    done
+    gh pr create --base "$BASE_BRANCH" --head "ralph/<TASK-KEY>" \
+      --title "<TASK-KEY>: <summary>" --body "Implements <TASK-KEY>"
+    gh pr review "ralph/<TASK-KEY>" --approve
+  fi
   ```
-  If the task has **no blockers**, use `$DEFAULT_BRANCH` as the base.
+  If the implementer didn't create a draft PR (edge case), the fallback creates a ready PR directly.
 - **Transition**: Keep status at **"In Review"** — the merger will move it to "Done" after merging.
 
 ## 5. Commit & Stop

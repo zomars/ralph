@@ -88,11 +88,25 @@ ralph_gated_loop() {
     _exclude_blocked=$(jq -r ".agents.${_agent_key}.rules.exclude_blocked // false" "$(ralph_get_routing_json)")
     local _blocker_check
     _blocker_check=$(jq -r ".agents.${_agent_key}.rules.blocker_check // \"done\"" "$(ralph_get_routing_json)")
+    local _gate_label
+    _gate_label=$(jq -r ".agents.${_agent_key}.rules.gate_label // \"\"" "$(ralph_get_routing_json)")
     local _query
     _query="$(ralph_get_query "$_agent_key")"
     local unblocked_seen=0 pick_idx=0
     while (( pick_idx < task_count )); do
       jq ".issues[$pick_idx]" "$LOOP_WORK_FILE" > "$_task_file"
+      # Gate label check: skip tasks with gate_label that are still blocked
+      # (code already reviewed in a prior iteration — wait for blockers to resolve)
+      if [[ -n "$_gate_label" ]]; then
+        local has_gate
+        has_gate=$(jq -r --arg gl "$_gate_label" \
+          '[.fields.labels[]? | if type == "object" then .name else . end] | index($gl) != null' "$_task_file")
+        if [[ "$has_gate" == "true" ]] && ! provider_check_blockers "$_task_file" "$_blocker_check"; then
+          ralph_log "Skipping $(jq -r '.key' "$_task_file") (${_gate_label} but still blocked)"
+          pick_idx=$((pick_idx + 1))
+          continue
+        fi
+      fi
       if [[ "$_exclude_blocked" != "true" ]] || provider_check_blockers "$_task_file" "$_blocker_check"; then
         unblocked_seen=$((unblocked_seen + 1))
         if (( unblocked_seen == instance_num )); then
