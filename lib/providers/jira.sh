@@ -162,6 +162,35 @@ provider_check_blockers() {
   esac
 }
 
+# Mark a task as blocked via Jira REST API (used by loop guards)
+# Args: $1 = issue key, $2 = reason string
+provider_mark_blocked() {
+  local task_key="$1" reason="$2"
+  local jira_url="${JIRA_BASE_URL}/rest/api/3"
+  local auth_header
+  auth_header="Authorization: Basic $(printf '%s' "$JIRA_EMAIL:$JIRA_API_TOKEN" | base64)"
+
+  # Get current labels and append ralph-blocked
+  local current_labels new_labels
+  current_labels=$(curl -s -H "$auth_header" \
+    "$jira_url/issue/$task_key?fields=labels" \
+    | jq -r '.fields.labels // []')
+  new_labels=$(echo "$current_labels" | jq '. + ["ralph-blocked"] | unique')
+
+  curl -s -X PUT -H "$auth_header" -H "Content-Type: application/json" \
+    "$jira_url/issue/$task_key" \
+    -d "{\"fields\":{\"labels\":$new_labels}}" >/dev/null 2>&1 || true
+
+  # Add comment explaining why
+  local comment_body
+  comment_body=$(jq -n --arg text "RALPH loop guard: $reason" \
+    '{body:{type:"doc",version:1,content:[{type:"paragraph",content:[{type:"text",text:$text}]}]}}')
+  curl -s -X POST -H "$auth_header" -H "Content-Type: application/json" \
+    "$jira_url/issue/$task_key/comment" -d "$comment_body" >/dev/null 2>&1 || true
+
+  ralph_log "Marked $task_key as ralph-blocked: $reason"
+}
+
 # Write issue data to KB directory
 # Args: $1 = single issue JSON object, $2 = KB directory path
 provider_write_kb() {

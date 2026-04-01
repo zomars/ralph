@@ -10,14 +10,14 @@ You are analyzing a Ralph agent's session log to extract reusable learnings.
 Produce the **complete replacement** learnings file. Do NOT append — output the full final set.
 
 ## Rules
-1. Max **10 rules**. If you need to add one and are at 10, drop the least useful.
+1. Max **15 rules**. If you need to add one and are at 15, drop the least useful.
 2. Each rule has a `(seen: N)` counter:
    - If a pattern from the current learnings recurs in this session, **increment** its counter.
    - If a current rule is NOT relevant to this session, **decrement** its counter.
    - Rules that reach `(seen: 0)` are **dropped**.
    - New rules start at `(seen: 1)`.
-3. Focus on: wasted turns, tool misuse, prompt non-compliance, repeated errors, wrong assumptions.
-4. Rules must be **project-agnostic** — no repo-specific file paths, ticket keys, or entity names.
+3. Focus on: wasted turns, tool misuse, prompt non-compliance, repeated errors, wrong assumptions, **operational shortcuts** (how to start servers, log in, navigate UI, run tests).
+4. Rules must be **reusable across iterations** — no ticket keys or one-off facts, but project-specific operational knowledge (URLs, login steps, dev commands) is encouraged.
 5. Merge similar rules rather than keeping duplicates.
 6. Keep rules concise — one line each.
 

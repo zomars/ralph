@@ -95,6 +95,10 @@ ralph_run_loop() {
   local no_work_label
   no_work_label=$(typeset -f loop_no_work_label > /dev/null 2>&1 && loop_no_work_label || echo "tasks")
 
+  local consecutive_same_task=0
+  local max_consecutive_same="${RALPH_MAX_SAME_TASK:-3}"
+  local prev_task_key=""
+
   trap 'shutdown=1; [[ -n "$child_pid" ]] && kill -INT -$child_pid 2>/dev/null' INT TERM HUP
   local last_task_key=""
 
@@ -181,6 +185,24 @@ ralph_run_loop() {
       continue
     fi
 
+    # Same-task repeat guard: auto-block tasks stuck across iterations
+    if [[ "$LOOP_TASK_KEY" == "$prev_task_key" ]]; then
+      consecutive_same_task=$((consecutive_same_task + 1))
+      if (( consecutive_same_task > max_consecutive_same )); then
+        ralph_log "Task $LOOP_TASK_KEY stuck ($consecutive_same_task consecutive iterations). Auto-blocking."
+        if typeset -f provider_mark_blocked > /dev/null 2>&1; then
+          provider_mark_blocked "$LOOP_TASK_KEY" \
+            "Loop guard: $max_consecutive_same consecutive iterations without completion"
+        fi
+        prev_task_key=""
+        consecutive_same_task=0
+        continue
+      fi
+    else
+      prev_task_key="$LOOP_TASK_KEY"
+      consecutive_same_task=1
+    fi
+
     last_task_key="$LOOP_TASK_KEY"
     iteration=$((iteration + 1))
     tmpfile=$(mktemp)
@@ -240,8 +262,27 @@ PROMPT_EOF
     ( sleep "$max_iteration_seconds" && ralph_log "Iteration timeout (${max_iteration_seconds}s). Force-killing..." && kill -9 -$child_pid 2>/dev/null ) &
     watchdog_pid=$!
 
+    # Playwright budget watchdog: kill iteration if browser tool calls exceed cap
+    local pw_budget="${RALPH_PLAYWRIGHT_BUDGET:-20}"
+    local pw_watchdog_pid=""
+    (
+      local pw_count=0
+      tail -f -n +1 "$raw_output" 2>/dev/null | while IFS= read -r line; do
+        if [[ "$line" == *'"tool_name":"mcp__plugin_playwright'* ]]; then
+          pw_count=$((pw_count + 1))
+          if (( pw_count >= pw_budget )); then
+            ralph_log "Playwright budget exhausted ($pw_count/$pw_budget). Killing iteration."
+            kill -INT -$child_pid 2>/dev/null
+            break
+          fi
+        fi
+      done
+    ) &
+    pw_watchdog_pid=$!
+
     wait $child_pid 2>/dev/null || true
     kill $watchdog_pid 2>/dev/null || true; wait $watchdog_pid 2>/dev/null || true
+    kill $pw_watchdog_pid 2>/dev/null || true; wait $pw_watchdog_pid 2>/dev/null || true
     # Kill the entire streaming pipeline by its real PGID (not $stream_pid which
     # is jq — the last member — and NOT the process group leader).
     if [[ -n "$stream_pgid" ]]; then
@@ -299,6 +340,11 @@ PROMPT_EOF
     if [[ "$result" == *"<promise>ABORT</promise>"* ]]; then
       echo "Ralph ($agent_name) aborted at iteration $iteration."
       exit 1
+    fi
+
+    # Reset same-task counter on successful completion
+    if [[ "$result" == *"<promise>COMPLETE</promise>"* ]]; then
+      consecutive_same_task=0
     fi
 
     if [[ "$max_iterations" -gt 0 && "$iteration" -ge "$max_iterations" ]]; then
