@@ -60,6 +60,42 @@ The implementer JQL excludes tasks whose blockers are still in "To Do" or "In Pr
 
 Use `mcp__jira__addAttachmentToJiraIssue` to upload files (screenshots, logs, etc.) to a Jira issue. The response includes the `content` URL for each attachment — use it to embed in comments with markdown: `![description](url)`
 
+## Tool Parameter Reference
+
+Call these tools exactly as shown — wrong parameter names or types waste turns.
+
+### getTransitionsForJiraIssue
+```json
+{ "issueIdOrKey": "PROJ-123" }
+```
+
+### transitionJiraIssue
+```json
+{ "issueIdOrKey": "PROJ-123", "transition": { "id": "21" } }
+```
+`transition` is an **object** with an `id` string — not a bare ID, not a JSON string.
+
+### editJiraIssue
+```json
+{ "issueIdOrKey": "PROJ-123", "fields": { "labels": ["label-a", "label-b"] } }
+```
+Labels are an **array of strings** — not objects like `[{"name":"x"}]`.
+
+### addCommentToJiraIssue
+```json
+{ "issueIdOrKey": "PROJ-123", "commentBody": "Markdown comment here" }
+```
+
+### createJiraIssue
+```json
+{ "projectKey": "PROJ", "issueTypeName": "Task", "summary": "Title", "description": "Markdown", "labels": ["label"] }
+```
+
+### addAttachmentToJiraIssue
+```json
+{ "issueIdOrKey": "PROJ-123", "filePath": "/path/to/file.png" }
+```
+
 ## Rate Limiting
 
 If a Jira MCP tool returns a rate-limit error, wait 30 seconds (use `sleep 30` in bash) then retry **once**. If it fails again, output `<promise>ABORT</promise>` — do NOT keep retrying and waste turns.

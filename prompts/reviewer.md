@@ -52,7 +52,7 @@ Based on your analysis, choose ONE path:
 
 - **Action**: Comment on the task explaining _exactly_ what failed.
 - **Transition**: Move status back to **"In Progress"**.
-- **Jira Label**: (Optional) If it was a build error, read current labels from the issue, append `ralph-failed`, and update via `editJiraIssue` with the full label list as `{"labels": [{"name": "label1"}, {"name": "label2"}]}`.
+- **Jira Label**: (Optional) If it was a build error, read current labels from the issue, append `ralph-failed`, and update via `editJiraIssue` with the full label list as `{"labels": ["label1", "label2"]}`.
 
 ### Path B: NEEDS TESTING (No Evidence of Browser Testing)
 
@@ -60,14 +60,14 @@ Based on your analysis, choose ONE path:
   1. Which acceptance criteria lack evidence
   2. What constitutes acceptable evidence for each (e.g. "Screenshot of upload returning 201 with file_path in response", "Screenshot showing radon alert triggered for reading > 4.0 pCi/L", "API response showing structured_data matches the extraction schema")
   3. Any edge cases the tester should cover based on the PRD
-- **Jira Label**: Read current labels from the issue, append `needs-tests`, and update via `editJiraIssue` with the full label list as `{"labels": [{"name": "label1"}, {"name": "needs-tests"}]}`.
+- **Jira Label**: Read current labels from the issue, append `needs-tests`, and update via `editJiraIssue` with the full label list as `{"labels": ["label1", "needs-tests"]}`.
 - **Transition**: Move status to **"To Do"**. (This hands off to the Tester Agent).
 
 ### Path C: APPROVE (Good to Go)
 
 - **Precondition**: Tests pass, code is clean, AND a test report with screenshots exists that adequately covers the ticket's acceptance criteria.
 - **Action**: Comment "Verified. Tests passed. Browser testing evidence confirmed. Code looks good."
-- **Jira Label**: Read current labels from the issue, append `ready-to-merge`, and update via `editJiraIssue` with the full label list as `{"labels": [{"name": "label1"}, {"name": "ready-to-merge"}]}`. This prevents the reviewer from re-picking this task.
+- **Jira Label**: Read current labels from the issue, append `ready-to-merge`, and update via `editJiraIssue` with the full label list as `{"labels": ["label1", "ready-to-merge"]}`. This prevents the reviewer from re-picking this task.
 - **Create PR and approve**:
   ```bash
   DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')

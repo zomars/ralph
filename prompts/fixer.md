@@ -66,7 +66,9 @@ Proceed to Step 2b if CI is also failing, otherwise skip to Step 3.
 
 3. **Diagnose and fix** the errors shown in CI logs. Common causes: type errors, missing imports, lint failures, test failures. Push the fix and let CI re-validate.
 
-4. After fixing, proceed to Step 3 — always check for review feedback too.
+4. **Circuit breaker**: If you have already pushed a fix for the same CI check and it still fails, you have used one attempt. After **3 failed attempts** on the same check (push → CI fails → read logs → edit → push → same check fails again), stop looping. Treat it as a blocker and follow the ABORT escalation in Step 4 (Test, Commit & Push).
+
+5. After fixing, proceed to Step 3 — always check for review feedback too.
 
 ## 3. Read & Address Feedback
 

@@ -88,7 +88,7 @@ After verification is complete:
 1. **Remove Label**: Remove `needs-tests` safely:
    1. Read current labels from the issue
    2. Filter out `needs-tests`, keep all others
-   3. Update the issue with the filtered label list as a `fields` object (e.g. `{"labels": [{"name": "kept-label"}]}`)
+   3. Update the issue with the filtered label list as a `fields` object (e.g. `{"labels": ["kept-label"]}`)
 2. **Upload screenshots** as attachments to the issue. Collect the returned `content` URLs from each upload response.
 3. **Add a comment** with a clear test report. Reference each screenshot on its own standalone line as `![step description](content-url)`:
    - **Action**: Browser verification of [feature]
