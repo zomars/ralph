@@ -1,0 +1,208 @@
+#!/bin/bash
+set -eo pipefail
+
+# Validate MCP tool registrations against snapshot.
+# Detects: removed tools, renamed tools, new unregistered tools.
+#
+# Usage:
+#   validate-mcp-tools              # Check current tools match snapshot
+#   validate-mcp-tools --update     # Regenerate snapshot from source
+
+RALPH_HOME="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+SNAPSHOT="$RALPH_HOME/mcp-tools.snapshot.json"
+
+if ! command -v jq &>/dev/null; then
+  echo "ERROR: jq is required but not installed" >&2
+  exit 1
+fi
+
+# ── Extract tool names from a .mjs file ─────────────────────────────────────
+# Looks for: server.tool(\n  "toolName",
+extract_tools() {
+  local file="$1"
+  grep -A1 'server\.tool(' "$file" \
+    | grep -oE '"[a-zA-Z_][a-zA-Z0-9_]*"' \
+    | tr -d '"' \
+    | sort
+}
+
+# ── Extract tools scoped to a specific agent key ────────────────────────────
+# Looks for: if (AGENT_KEY === "agent") { ... server.tool("name", ...
+extract_scoped_tools() {
+  local file="$1" agent="$2"
+  awk '
+    /AGENT_KEY === "'"$agent"'"/ { inside=1; depth=0 }
+    inside { for(i=1;i<=length($0);i++) { c=substr($0,i,1); if(c=="{")depth++; if(c=="}")depth-- } }
+    inside && depth<=0 && NR>1 { inside=0 }
+    inside && /server\.tool\(/ { getline; print }
+  ' "$file" \
+    | grep -oE '"[a-zA-Z_][a-zA-Z0-9_]*"' \
+    | tr -d '"' \
+    | sort
+}
+
+# ── Extract always-registered tools (outside any AGENT_KEY block) ───────────
+extract_always_tools() {
+  local file="$1"
+  awk '
+    /AGENT_KEY === / { inside=1; depth=0 }
+    inside { for(i=1;i<=length($0);i++) { c=substr($0,i,1); if(c=="{")depth++; if(c=="}")depth-- } }
+    inside && depth<=0 && NR>1 { inside=0 }
+    !inside && /server\.tool\(/ { getline; print }
+  ' "$file" \
+    | grep -oE '"[a-zA-Z_][a-zA-Z0-9_]*"' \
+    | tr -d '"' \
+    | sort
+}
+
+# ── Update mode ─────────────────────────────────────────────────────────────
+
+if [[ "$1" == "--update" ]]; then
+  echo "Regenerating $SNAPSHOT from source..."
+
+  # ralph-mcp.mjs: extract always + per-agent tools
+  ralph_mcp="$RALPH_HOME/lib/ralph-mcp.mjs"
+  always=$(extract_always_tools "$ralph_mcp" | jq -R . | jq -s .)
+
+  # Detect agent keys dynamically
+  agent_keys=$(grep -oE 'AGENT_KEY === "[a-zA-Z]+"' "$ralph_mcp" \
+    | grep -oE '"[a-zA-Z]+"' | tr -d '"' | sort -u)
+
+  agent_json="{}"
+  agent_json=$(echo "$agent_json" | jq --argjson a "$always" '. + {always: $a}')
+  for key in $agent_keys; do
+    tools=$(extract_scoped_tools "$ralph_mcp" "$key" | jq -R . | jq -s .)
+    agent_json=$(echo "$agent_json" | jq --arg k "$key" --argjson t "$tools" '. + {($k): $t}')
+  done
+
+  # Provider MCP servers: flat tool lists
+  jira_tools=$(extract_tools "$RALPH_HOME/providers/jira/mcp-server.mjs" | jq -R . | jq -s .)
+  linear_tools=$(extract_tools "$RALPH_HOME/providers/linear/mcp-server.mjs" | jq -R . | jq -s .)
+
+  jq -n \
+    --argjson ralph "$agent_json" \
+    --argjson jira "$jira_tools" \
+    --argjson linear "$linear_tools" \
+    '{
+      "lib/ralph-mcp.mjs": $ralph,
+      "providers/jira/mcp-server.mjs": $jira,
+      "providers/linear/mcp-server.mjs": $linear
+    }' > "$SNAPSHOT"
+
+  echo "Updated: $SNAPSHOT"
+  exit 0
+fi
+
+# ── Validation mode ─────────────────────────────────────────────────────────
+
+if [[ ! -f "$SNAPSHOT" ]]; then
+  echo "ERROR: Snapshot not found at $SNAPSHOT" >&2
+  echo "Run: validate-mcp-tools --update" >&2
+  exit 1
+fi
+
+errors=0
+
+check_flat_server() {
+  local rel_path="$1" file="$RALPH_HOME/$1"
+
+  if [[ ! -f "$file" ]]; then
+    echo "WARN: $rel_path not found, skipping"
+    return
+  fi
+
+  local actual expected
+  actual=$(extract_tools "$file")
+  expected=$(jq -r ".\"$rel_path\"[]" "$SNAPSHOT" | sort)
+
+  local missing added
+  missing=$(comm -23 <(echo "$expected") <(echo "$actual"))
+  added=$(comm -13 <(echo "$expected") <(echo "$actual"))
+
+  if [[ -n "$missing" ]]; then
+    echo "FAIL: $rel_path — tools REMOVED (update snapshot if intentional):"
+    echo "$missing" | sed 's/^/  - /'
+    errors=$((errors + 1))
+  fi
+  if [[ -n "$added" ]]; then
+    echo "FAIL: $rel_path — tools ADDED but not in snapshot:"
+    echo "$added" | sed 's/^/  + /'
+    errors=$((errors + 1))
+  fi
+}
+
+check_ralph_mcp() {
+  local file="$RALPH_HOME/lib/ralph-mcp.mjs"
+  local rel="lib/ralph-mcp.mjs"
+
+  if [[ ! -f "$file" ]]; then
+    echo "WARN: $rel not found, skipping"
+    return
+  fi
+
+  # Check "always" tools
+  local actual expected missing added
+  actual=$(extract_always_tools "$file")
+  expected=$(jq -r ".\"$rel\".always[]" "$SNAPSHOT" | sort)
+
+  missing=$(comm -23 <(echo "$expected") <(echo "$actual"))
+  added=$(comm -13 <(echo "$expected") <(echo "$actual"))
+
+  if [[ -n "$missing" ]]; then
+    echo "FAIL: $rel [always] — tools REMOVED:"
+    echo "$missing" | sed 's/^/  - /'
+    errors=$((errors + 1))
+  fi
+  if [[ -n "$added" ]]; then
+    echo "FAIL: $rel [always] — tools ADDED but not in snapshot:"
+    echo "$added" | sed 's/^/  + /'
+    errors=$((errors + 1))
+  fi
+
+  # Check per-agent scoped tools
+  local agents
+  agents=$(jq -r ".\"$rel\" | keys[] | select(. != \"always\")" "$SNAPSHOT")
+  for agent in $agents; do
+    actual=$(extract_scoped_tools "$file" "$agent")
+    expected=$(jq -r ".\"$rel\".\"$agent\"[]" "$SNAPSHOT" | sort)
+
+    missing=$(comm -23 <(echo "$expected") <(echo "$actual"))
+    added=$(comm -13 <(echo "$expected") <(echo "$actual"))
+
+    if [[ -n "$missing" ]]; then
+      echo "FAIL: $rel [$agent] — tools REMOVED:"
+      echo "$missing" | sed 's/^/  - /'
+      errors=$((errors + 1))
+    fi
+    if [[ -n "$added" ]]; then
+      echo "FAIL: $rel [$agent] — tools ADDED but not in snapshot:"
+      echo "$added" | sed 's/^/  + /'
+      errors=$((errors + 1))
+    fi
+  done
+
+  # Check for new agent keys not in snapshot
+  local source_agents snapshot_agents new_agents
+  source_agents=$(grep -oE 'AGENT_KEY === "[a-zA-Z]+"' "$file" \
+    | grep -oE '"[a-zA-Z]+"' | tr -d '"' | sort -u)
+  snapshot_agents=$(echo "$agents" | sort)
+  new_agents=$(comm -13 <(echo "$snapshot_agents") <(echo "$source_agents"))
+
+  if [[ -n "$new_agents" ]]; then
+    echo "FAIL: $rel — new agent key(s) not in snapshot:"
+    echo "$new_agents" | sed 's/^/  + /'
+    errors=$((errors + 1))
+  fi
+}
+
+check_ralph_mcp
+check_flat_server "providers/jira/mcp-server.mjs"
+check_flat_server "providers/linear/mcp-server.mjs"
+
+if [[ $errors -gt 0 ]]; then
+  echo ""
+  echo "$errors error(s). If changes are intentional, run: validate-mcp-tools --update"
+  exit 1
+fi
+
+echo "OK: All MCP tools match snapshot"

@@ -1,0 +1,55 @@
+{
+  "lib/ralph-mcp.mjs": {
+    "always": [
+      "addAttachmentToJiraIssue",
+      "addCommentToJiraIssue",
+      "createIssueLink",
+      "createJiraIssue",
+      "createRemoteLink",
+      "editJiraIssue",
+      "getJiraIssue",
+      "getTransitionsForJiraIssue",
+      "searchJiraIssuesUsingJql",
+      "transitionJiraIssue"
+    ],
+    "fixer": [
+      "ralph_fixer_dismiss_reviews",
+      "ralph_fixer_get_feedback",
+      "ralph_fixer_reply_and_resolve"
+    ],
+    "implementer": [
+      "ralph_implementer_create_pr"
+    ],
+    "merger": [
+      "ralph_merger_merge",
+      "ralph_merger_verify"
+    ],
+    "reviewer": [
+      "ralph_reviewer_approve",
+      "ralph_reviewer_needs_tests",
+      "ralph_reviewer_reject"
+    ]
+  },
+  "providers/jira/mcp-server.mjs": [
+    "addAttachmentToJiraIssue",
+    "addCommentToJiraIssue",
+    "createIssueLink",
+    "createJiraIssue",
+    "createRemoteLink",
+    "editJiraIssue",
+    "getJiraIssue",
+    "getTransitionsForJiraIssue",
+    "searchJiraIssuesUsingJql",
+    "transitionJiraIssue"
+  ],
+  "providers/linear/mcp-server.mjs": [
+    "addComment",
+    "createIssue",
+    "createRelation",
+    "getIssue",
+    "getTeamLabels",
+    "getWorkflowStates",
+    "searchIssues",
+    "updateIssue"
+  ]
+}
