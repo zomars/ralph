@@ -27,7 +27,7 @@ provider_fetch_tasks() {
   local max_results="${2:-10}"
   local body
   body=$(jq -n --arg jql "$query" --argjson max "$max_results" \
-    '{"jql":$jql,"maxResults":$max,"fields":["summary","status","labels","priority","issuelinks","comment","parent","attachment","description","created","updated"]}')
+    '{"jql":$jql,"maxResults":$max,"fields":["summary","status","labels","priority","issuelinks","comment","parent","attachment","description","created","updated","subtasks"]}')
   # Write directly to a temp file — never store Jira JSON in a zsh variable.
   # Jira ADF descriptions contain literal newlines inside JSON strings that
   # get corrupted by zsh variable expansion + echo.

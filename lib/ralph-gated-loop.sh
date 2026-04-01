@@ -92,13 +92,23 @@ ralph_gated_loop() {
     _gate_label=$(jq -r ".agents.${_agent_key}.rules.gate_label // \"\"" "$(ralph_get_routing_json)")
     local _query
     _query="$(ralph_get_query "$_agent_key")"
-    local unblocked_seen=0 pick_idx=0
+    local _skip_open_subtasks
+    _skip_open_subtasks=$(jq -r ".agents.${_agent_key}.rules.skip_with_open_subtasks // false" "$(ralph_get_routing_json)")
+    local unblocked_seen=0 pick_idx=0 _open_subtask_count has_gate
     while (( pick_idx < task_count )); do
       jq ".issues[$pick_idx]" "$LOOP_WORK_FILE" > "$_task_file"
+      # Skip parent issues with incomplete subtasks — work the subtasks instead
+      if [[ "$_skip_open_subtasks" == "true" ]]; then
+        _open_subtask_count=$(jq '[.fields.subtasks[]? | select(.fields.status.statusCategory.key != "done")] | length' "$_task_file")
+        if (( _open_subtask_count > 0 )); then
+          ralph_log "Skipping $(jq -r '.key' "$_task_file") (has $_open_subtask_count open subtask(s))"
+          pick_idx=$((pick_idx + 1))
+          continue
+        fi
+      fi
       # Gate label check: skip tasks with gate_label that are still blocked
       # (code already reviewed in a prior iteration — wait for blockers to resolve)
       if [[ -n "$_gate_label" ]]; then
-        local has_gate
         has_gate=$(jq -r --arg gl "$_gate_label" \
           '[.fields.labels[]? | if type == "object" then .name else . end] | index($gl) != null' "$_task_file")
         if [[ "$has_gate" == "true" ]] && ! provider_check_blockers "$_task_file" "$_blocker_check"; then

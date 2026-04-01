@@ -41,6 +41,7 @@
         "labels_exclude": ["needs-tests", "tech-debt", "ralph-blocked", "needs-planning", "needs-input"],
         "description_condition": "not_empty_and_not_todo",
         "exclude_blocked": true,
+        "skip_with_open_subtasks": true,
         "order_by": "priority_desc"
       },
       "script": "bin/afk-implementer",

@@ -46,6 +46,7 @@ Debugging:
 
 Utility commands:
   validate          Run routing validation (accepts --matrix, --check-prompts, --check-loops, --check-all)
+  test              Run unit tests (tests/)
   status            Show task counts and running instances for all agents
   cleanup           Remove orphan processes, stale slots, and orphan worktrees
     --dry-run       Show what would be cleaned without acting
@@ -240,6 +241,32 @@ cmd_cleanup() {
 
 cmd_version() {
   echo "ralph $RALPH_VERSION"
+}
+
+cmd_test() {
+  local test_dir="$RALPH_HOME/tests"
+  local failures=0
+  local count=0
+  for t in "$test_dir"/test-*.sh; do
+    [[ -f "$t" ]] || continue
+    count=$((count + 1))
+    echo "▶ $(basename "$t")"
+    if zsh "$t"; then
+      :
+    else
+      failures=$((failures + 1))
+    fi
+    echo ""
+  done
+  if (( count == 0 )); then
+    echo "No tests found in $test_dir"
+    exit 1
+  fi
+  if (( failures > 0 )); then
+    echo "FAILED: $failures/$count test file(s) had failures"
+    exit 1
+  fi
+  echo "ALL $count test file(s) passed"
 }
 
 # Agent key → display name mapping
@@ -824,6 +851,7 @@ case "$subcmd" in
   help|--help|-h|"")  usage ;;
   run)                cmd_run "$@" ;;
   validate)           exec "$RALPH_HOME/bin/validate-routing-impl" "$@" ;;
+  test)               cmd_test "$@" ;;
   watchdog)            cmd_watchdog "$@" ;;
   planner|implementer|reviewer|tester|refactor|documenter)
                       cmd_agent "$subcmd" "$@" ;;
