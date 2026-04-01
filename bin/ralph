@@ -41,6 +41,8 @@ Debugging:
     --raw           Show raw JSON instead of rendered text
     --prompt        Show last iteration's full prompt (system + initial message)
     --preview-prompt Assemble system prompt on-the-fly (no iteration needed)
+    --last N        Show last N saved iterations (requires RALPH_LOG_DIR)
+    --analyze       Analyze last N iterations for bottlenecks and waste (use with --last)
 
 Utility commands:
   validate          Run routing validation (accepts --matrix, --check-prompts, --check-loops, --check-all)
@@ -405,8 +407,9 @@ cmd_github_agent() {
 }
 
 cmd_debug() {
-  # Parse args: ralph debug <agent> [instance] [-f|--follow] [-n|--lines N] [--raw]
+  # Parse args: ralph debug <agent> [instance] [-f|--follow] [-n|--lines N] [--raw] [--last N] [--analyze]
   local agent_key="" instance_num=1 follow=false raw=false prompt=false preview_prompt=false lines=200
+  local last_n=0 analyze=false
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -415,9 +418,11 @@ cmd_debug() {
       --prompt) prompt=true; shift ;;
       --preview-prompt) preview_prompt=true; shift ;;
       -n|--lines) lines="$2"; shift 2 ;;
+      --last) last_n="$2"; shift 2 ;;
+      --analyze) analyze=true; shift ;;
       -*)
         echo "Unknown option: $1"
-        echo "Usage: ralph debug <agent> [instance] [-f|--follow] [-n|--lines N] [--raw] [--prompt] [--preview-prompt]"
+        echo "Usage: ralph debug <agent> [instance] [-f|--follow] [-n|--lines N] [--raw] [--prompt] [--preview-prompt] [--last N] [--analyze]"
         exit 1
         ;;
       *)
@@ -449,6 +454,128 @@ cmd_debug() {
   esac
 
   source "$RALPH_HOME/lib/ralph-core.sh"
+
+  # --last N mode: show/analyze the last N saved session logs
+  if (( last_n > 0 )); then
+    if [[ -z "${RALPH_LOG_DIR:-}" ]]; then
+      echo "Error: RALPH_LOG_DIR is not set. Add it to your .ralphrc to persist logs."
+      exit 1
+    fi
+
+    local log_dir="${RALPH_LOG_DIR%/}/${agent_key}-${instance_num}"
+    if [[ ! -d "$log_dir" ]]; then
+      echo "No saved logs for ${agent_key} #${instance_num} in $log_dir"
+      exit 1
+    fi
+
+    # Collect the last N log files (newest first)
+    local -a log_files
+    log_files=( $(ls -t "$log_dir"/*.log 2>/dev/null | head -n "$last_n") )
+
+    if [[ ${#log_files[@]} -eq 0 ]]; then
+      echo "No log files found in $log_dir"
+      exit 1
+    fi
+
+    echo "── ${agent_key} #${instance_num} — last ${#log_files[@]} iteration(s) ──"
+    echo ""
+
+    if [[ "$analyze" == "true" ]]; then
+      # Concatenate logs with session markers for analysis
+      local collected
+      collected=$(mktemp /tmp/ralph-debug-analyze.XXXXXX)
+      # Process in chronological order (oldest first)
+      for log_file in "${(Oa)log_files[@]}"; do
+        echo "--- SESSION: $(basename "$log_file") ---" >> "$collected"
+        cat "$log_file" >> "$collected"
+        echo "" >> "$collected"
+      done
+
+      # Truncate if too large (keep last 200K chars)
+      local max_chars=200000
+      local file_size
+      file_size=$(wc -c < "$collected")
+      if (( file_size > max_chars )); then
+        echo "Warning: Logs exceed ${max_chars} chars, truncating to most recent sessions." >&2
+        local truncated
+        truncated=$(mktemp /tmp/ralph-debug-trunc.XXXXXX)
+        tail -c "$max_chars" "$collected" > "$truncated"
+        mv "$truncated" "$collected"
+      fi
+
+      local model
+      model=$(ralph_resolve_model "watchdog")
+      local cli
+      cli=$(ralph_get_agent_cli)
+      local prompt_file="$RALPH_HOME/prompts/debug-analyze.md"
+
+      echo "Analyzing ${#log_files[@]} iteration(s) (model: $model)..." >&2
+
+      local tmpfile
+      tmpfile=$(mktemp /tmp/ralph-debug-output.XXXXXX)
+      local log_content
+      log_content=$(<"$collected")
+
+      "$cli" --verbose --print --max-turns 50 --output-format stream-json \
+        --model "$model" \
+        --dangerously-skip-permissions \
+        --append-system-prompt "$(cat "$prompt_file")" \
+        "Analyze these ${agent_key} agent session logs (${#log_files[@]} iterations, instance #${instance_num}):
+
+$log_content" \
+        2>/dev/null \
+        | grep --line-buffered '^{' \
+        | tee "$tmpfile" \
+        | jq -rj 'select(.type == "assistant") | .message.content[]? | select(.type == "text") | .text // empty' 2>/dev/null
+
+      # Extract and save report
+      local output
+      output=$(grep '^{' "$tmpfile" \
+        | jq -rj 'select(.type == "result") | .result // empty' 2>/dev/null)
+      if [[ -z "$output" ]]; then
+        output=$(grep '^{' "$tmpfile" \
+          | jq -rj 'select(.type == "assistant") | .message.content[]? | select(.type == "text") | .text // empty' 2>/dev/null)
+      fi
+
+      local timestamp
+      timestamp=$(date +%Y%m%d-%H%M%S)
+      local report_file="$RALPH_LOG_DIR/debug-analysis-${agent_key}-${timestamp}.md"
+      local report
+      report=$(echo "$output" | sed -n '/<report>/,/<\/report>/p' | sed '1d;$d')
+      if [[ -n "$report" ]]; then
+        echo "$report" > "$report_file"
+      else
+        echo "$output" > "$report_file"
+      fi
+      echo "" >&2
+      echo "Report saved: $report_file" >&2
+
+      rm -f "$tmpfile" "$collected"
+    else
+      # Display mode: render each log with session boundaries
+      ralph_get_jq_filters
+      local stream_text="$RALPH_STREAM_FILTER"
+
+      # Process in chronological order (oldest first)
+      for log_file in "${(Oa)log_files[@]}"; do
+        echo "--- SESSION: $(basename "$log_file") ---"
+        if [[ "$raw" == "true" ]]; then
+          cat "$log_file"
+        else
+          grep '^{' "$log_file" \
+            | jq -rj "$stream_text" 2>/dev/null || true
+        fi
+        echo ""
+      done | if (( lines > 0 )); then tail -n "$lines"; else cat; fi
+    fi
+    return
+  fi
+
+  # --analyze without --last is an error
+  if [[ "$analyze" == "true" ]]; then
+    echo "Error: --analyze requires --last N (e.g. ralph debug implementer --last 10 --analyze)"
+    exit 1
+  fi
 
   # --preview-prompt mode: fetch real task and assemble the full prompt the agent will see
   if [[ "$preview_prompt" == "true" ]]; then

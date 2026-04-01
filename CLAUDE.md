@@ -16,6 +16,8 @@ ralph fixer --once              # GitHub PR fixer agent
 ralph debug implementer         # Show last 200 lines of agent output
 ralph debug implementer -f      # Live tail a running agent
 ralph debug implementer 2 --raw # Raw JSON from instance 2
+ralph debug implementer --last 10          # Show last 10 saved iterations
+ralph debug implementer --last 10 --analyze # Analyze iterations for bottlenecks/waste
 ralph validate --check-all      # Validate routing rules (run after routing changes)
 ralph init                      # Create .ralphrc in CWD
 ralph config                    # Show current config
@@ -49,10 +51,10 @@ Agents never talk to each other. They coordinate through **Jira status transitio
 ```
 Planner → Implementer → Reviewer ─┬─ reject → Implementer
                                    ├─ needs-tests → Tester → Reviewer
-                                   └─ approve+PR → Fixer → Merger → Documenter
+                                   └─ approve+undraft → Fixer → Merger → Documenter
 ```
 
-Key non-obvious rules: reviewer creates PRs (not implementer), merger auto-closes parents when all subtasks are Done, fixer dismisses stale reviews to re-enter the merge gate.
+Key non-obvious rules: implementer creates draft PRs (reviewer undrafts on approval), merger auto-closes parents when all subtasks are Done, fixer dismisses stale reviews to re-enter the merge gate.
 
 ### Agent Prompts (`prompts/*.md`)
 
