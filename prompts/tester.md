@@ -52,6 +52,7 @@ If a referenced file is missing, verify your current branch before searching git
    - **After switching branches** with a running dev server, wait for hot-reload to settle (use `browser_wait_for` with expected page content) or restart the dev server before resuming browser testing.
    - If the worktree setup mentions "Test data: seeded", trust it — don't create fixtures manually.
    - If test data is missing and you can't navigate the feature, ABORT — don't spend time building fixtures.
+   - **Login credentials are in the worktree setup output.** Use them directly — never grep for passwords or manipulate the database.
 2. **Read the issue description and all comments** carefully. Identify the acceptance criteria and expected behavior.
 3. **Targeted code exploration only** — find the specific route/component for this task. Spend at most 3 tool calls on exploration, then move to the browser.
 

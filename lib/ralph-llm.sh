@@ -109,6 +109,7 @@ $(cat "$learnings_file")"
         --max-turns 100 \
         --output-format stream-json \
         --dangerously-skip-permissions \
+        --disallowedTools ToolSearch \
         --append-system-prompt "$full_system_prompt" \
         "$initial_message")
       ;;
