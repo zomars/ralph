@@ -85,6 +85,16 @@ ralph_run_loop() {
   local stream_text="$RALPH_STREAM_FILTER"
   local final_result="$RALPH_RESULT_FILTER"
 
+  # ─── Model (for titlebar display) ──────────────────────────────────────
+  local model_id model_short
+  model_id=$(ralph_resolve_model "$agent_key")
+  case "$model_id" in
+    *opus*)   model_short="opus" ;;
+    *sonnet*) model_short="sonnet" ;;
+    *haiku*)  model_short="haiku" ;;
+    *)        model_short="$model_id" ;;
+  esac
+
   # ─── State ──────────────────────────────────────────────────────────────
   local iteration=0
   local tmpfile=""
@@ -165,7 +175,7 @@ ralph_run_loop() {
       local wait_label="Iteration $iteration"
       [[ -n "$last_task_key" ]] && wait_label+=" | Last: $last_task_key"
       wait_label+=" | Waiting"
-      ralph_cooldown "$poll_interval" "${(U)agent_name} #$instance_num | $wait_label" || _loop_die
+      ralph_cooldown "$poll_interval" "${(U)agent_name} #$instance_num | $model_short | $wait_label" || _loop_die
       continue
     fi
 
@@ -181,7 +191,7 @@ ralph_run_loop() {
       local wait_label2="Iteration $iteration"
       [[ -n "$last_task_key" ]] && wait_label2+=" | Last: $last_task_key"
       wait_label2+=" | Waiting"
-      ralph_cooldown "$poll_interval" "${(U)agent_name} #$instance_num | $wait_label2" || _loop_die
+      ralph_cooldown "$poll_interval" "${(U)agent_name} #$instance_num | $model_short | $wait_label2" || _loop_die
       continue
     fi
 
@@ -208,7 +218,7 @@ ralph_run_loop() {
     tmpfile=$(mktemp)
 
     local display="${LOOP_TASK_DISPLAY:-$LOOP_TASK_KEY}"
-    ralph_titlebar_update "${(U)agent_name} #$instance_num | Iteration $iteration | $display | $(date '+%H:%M:%S')"
+    ralph_titlebar_update "${(U)agent_name} #$instance_num | $model_short | Iteration $iteration | $display | $(date '+%H:%M:%S')"
     echo "------- ${(U)agent_name} #$instance_num ITERATION $iteration ($display) --------"
 
     # Write iteration marker to session log
@@ -359,6 +369,6 @@ PROMPT_EOF
     fi
 
     ralph_log "Iteration complete. Cooldown ${poll_interval}s..."
-    ralph_cooldown "$poll_interval" "${(U)agent_name} #$instance_num | Iteration $iteration | Cooldown" || _loop_die
+    ralph_cooldown "$poll_interval" "${(U)agent_name} #$instance_num | $model_short | Iteration $iteration | Cooldown" || _loop_die
   done
 }
