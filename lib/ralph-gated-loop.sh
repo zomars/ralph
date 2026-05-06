@@ -23,6 +23,10 @@ ralph_gated_loop() {
     ralph_load_provider
   }
 
+  loop_uses_worktree() {
+    jq -r ".agents.${_agent_key}.rules.uses_worktree // true" "$(ralph_get_routing_json)"
+  }
+
   loop_fetch_work() {
     local query
     query="$(ralph_get_query "$_agent_key")"
@@ -173,15 +177,17 @@ Execute your workflow now. Start with Step 1.${worktree_context}"
   }
 
   loop_post_iteration() {
-    # Reset worktree to the repo's default branch (e.g. develop, main)
-    # so the next iteration starts from a clean, up-to-date base.
-    local workspace_branch="ralph-workspace/${_agent_key}-${instance_num}"
-    local default_ref="origin/HEAD"
-    git -C "$work_dir" fetch origin --quiet 2>/dev/null || true
-    git -C "$work_dir" checkout "$workspace_branch" 2>/dev/null || true
-    git -C "$work_dir" reset --hard "$default_ref" 2>/dev/null \
-      || git -C "$work_dir" reset --hard HEAD 2>/dev/null || true
-    git -C "$work_dir" clean -fd 2>/dev/null || true
+    # For agents using a git worktree, reset to the default branch so the next
+    # iteration starts clean. Skip for non-worktree agents (e.g. verifier).
+    if [[ "$(loop_uses_worktree)" == "true" ]]; then
+      local workspace_branch="ralph-workspace/${_agent_key}-${instance_num}"
+      local default_ref="origin/HEAD"
+      git -C "$work_dir" fetch origin --quiet 2>/dev/null || true
+      git -C "$work_dir" checkout "$workspace_branch" 2>/dev/null || true
+      git -C "$work_dir" reset --hard "$default_ref" 2>/dev/null \
+        || git -C "$work_dir" reset --hard HEAD 2>/dev/null || true
+      git -C "$work_dir" clean -fd 2>/dev/null || true
+    fi
     rm -f "$_task_file" 2>/dev/null
   }
 

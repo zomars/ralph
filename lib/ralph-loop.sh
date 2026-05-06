@@ -60,6 +60,12 @@ ralph_run_loop() {
   if [[ "$uses_worktree" == "true" ]]; then
     ralph_setup_worktree "$agent_key" "$instance_num"
     work_dir="$RALPH_WORKTREE_DIR"
+  elif [[ "$uses_worktree" == "false" ]]; then
+    if ! ralph_setup_verifier_cwd "$agent_key" "$instance_num"; then
+      rm -rf "$instance_slot" 2>/dev/null
+      exit 1
+    fi
+    work_dir="$RALPH_WORKTREE_DIR"
   else
     work_dir="$PWD"
   fi

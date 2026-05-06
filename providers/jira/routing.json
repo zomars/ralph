@@ -9,6 +9,10 @@
   "labels": [
     "needs-planning",
     "needs-tests",
+    "needs-staging-test",
+    "staging-broken",
+    "staging-verified",
+    "staging-flake",
     "tech-debt",
     "ralph-blocked",
     "ralph-failed",
@@ -24,7 +28,7 @@
       "rules": {
         "status_in": ["To Do", "In Progress"],
         "labels_include": null,
-        "labels_exclude": ["needs-input", "needs-tests", "tech-debt", "ralph-blocked", "ralph-failed", "documented"],
+        "labels_exclude": ["needs-input", "needs-tests", "needs-staging-test", "tech-debt", "ralph-blocked", "ralph-failed", "documented"],
         "description_condition": "empty_or_todo_or_label_needs_planning",
         "exclude_blocked": true,
         "blocker_check": "no_needs_planning",
@@ -38,7 +42,7 @@
       "rules": {
         "status_in": ["To Do", "In Progress"],
         "labels_include": null,
-        "labels_exclude": ["needs-tests", "tech-debt", "ralph-blocked", "needs-planning", "needs-input"],
+        "labels_exclude": ["needs-tests", "needs-staging-test", "tech-debt", "ralph-blocked", "needs-planning", "needs-input"],
         "description_condition": "not_empty_and_not_todo",
         "exclude_blocked": true,
         "skip_with_open_subtasks": true,
@@ -52,7 +56,7 @@
       "rules": {
         "status_in": ["In Review"],
         "labels_include": null,
-        "labels_exclude": ["needs-planning", "needs-tests", "tech-debt", "needs-input", "ready-to-merge"],
+        "labels_exclude": ["needs-planning", "needs-tests", "needs-staging-test", "tech-debt", "needs-input", "ready-to-merge"],
         "description_condition": null,
         "exclude_blocked": false,
         "gate_label": "code-approved",
@@ -66,7 +70,7 @@
       "rules": {
         "status_in": ["To Do", "In Progress", "In Review"],
         "labels_include": ["needs-tests"],
-        "labels_exclude": ["needs-planning", "needs-input"],
+        "labels_exclude": ["needs-planning", "needs-staging-test", "needs-input"],
         "description_condition": null,
         "order_by": "priority_desc"
       },
@@ -78,7 +82,7 @@
       "rules": {
         "status_in": ["To Do", "In Progress", "In Review", "Done"],
         "labels_include": ["tech-debt"],
-        "labels_exclude": ["needs-planning", "needs-input", "needs-tests"],
+        "labels_exclude": ["needs-planning", "needs-input", "needs-tests", "needs-staging-test"],
         "description_condition": null,
         "order_by": "priority_desc"
       },
@@ -90,12 +94,25 @@
       "rules": {
         "status_in": ["Done"],
         "labels_include": null,
-        "labels_exclude": ["documented", "tech-debt", "needs-input"],
+        "labels_exclude": ["documented", "tech-debt", "needs-input", "needs-staging-test"],
         "description_condition": null,
         "order_by": "updated_desc"
       },
       "script": "bin/afk-documenter",
       "prompt": "prompts/documenter.md"
+    },
+    "verifier": {
+      "adds_labels": ["staging-broken", "staging-verified", "staging-flake"],
+      "rules": {
+        "status_in": ["To Do", "In Progress", "In Review", "Done"],
+        "labels_include": ["needs-staging-test"],
+        "labels_exclude": ["staging-broken", "staging-verified", "staging-flake", "needs-input"],
+        "description_condition": null,
+        "uses_worktree": false,
+        "order_by": "priority_desc"
+      },
+      "script": "bin/afk-verifier",
+      "prompt": "prompts/verifier.md"
     }
   }
 }

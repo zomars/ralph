@@ -18,6 +18,7 @@ Agent commands (Jira-driven):
   implementer       Run the Implementer agent
   reviewer          Run the Reviewer agent
   tester            Run the Tester agent
+  verifier          Run the Verifier agent (staging-only, label-gated, no checkout)
   refactor          Run the Refactorer agent
   documenter        Run the Documenter agent
 
@@ -276,6 +277,7 @@ agent_display_name() {
     implementer)  echo "Implementer" ;;
     reviewer)     echo "Reviewer" ;;
     tester)       echo "Tester" ;;
+    verifier)     echo "Verifier" ;;
     refactor)     echo "Refactorer" ;;
     documenter)   echo "Documenter" ;;
     fixer)        echo "Fixer" ;;
@@ -466,16 +468,16 @@ cmd_debug() {
   if [[ -z "$agent_key" ]]; then
     echo "Usage: ralph debug <agent> [instance] [-f|--follow] [-n|--lines N] [--raw]"
     echo ""
-    echo "Agents: planner, implementer, reviewer, tester, refactor, documenter, fixer, merger"
+    echo "Agents: planner, implementer, reviewer, tester, verifier, refactor, documenter, fixer, merger"
     exit 1
   fi
 
   # Validate agent name
   case "$agent_key" in
-    planner|implementer|reviewer|tester|refactor|documenter|fixer|merger) ;;
+    planner|implementer|reviewer|tester|verifier|refactor|documenter|fixer|merger) ;;
     *)
       echo "Unknown agent: $agent_key"
-      echo "Agents: planner, implementer, reviewer, tester, refactor, documenter, fixer, merger"
+      echo "Agents: planner, implementer, reviewer, tester, verifier, refactor, documenter, fixer, merger"
       exit 1
       ;;
   esac
@@ -853,7 +855,7 @@ case "$subcmd" in
   validate)           exec "$RALPH_HOME/bin/validate-routing-impl" "$@" ;;
   test)               cmd_test "$@" ;;
   watchdog)            cmd_watchdog "$@" ;;
-  planner|implementer|reviewer|tester|refactor|documenter)
+  planner|implementer|reviewer|tester|verifier|refactor|documenter)
                       cmd_agent "$subcmd" "$@" ;;
   fixer|merger)       cmd_github_agent "$subcmd" "$@" ;;
   *)

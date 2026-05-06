@@ -89,12 +89,89 @@ ralph_setup_worktree() {
   fi
 }
 
+# ralph_setup_verifier_cwd <agent_key> <instance_num>
+# Creates a per-instance temp CWD for agents with uses_worktree=false.
+# No git operations — just file synthesis. Mirrors ralph_setup_worktree's outputs:
+# sets RALPH_WORKTREE_DIR (path) and RALPH_WORKTREE_CONTEXT (script stdout).
+ralph_setup_verifier_cwd() {
+  local agent_key="$1" instance_num="$2"
+  RALPH_WORKTREE_DIR="/tmp/ralph-${agent_key}/${instance_num}/cwd"
+  RALPH_WORKTREE_CONTEXT=""
+
+  # Recreate fresh each iteration (no state retention)
+  rm -rf "$RALPH_WORKTREE_DIR" 2>/dev/null || true
+  mkdir -p "$RALPH_WORKTREE_DIR"
+
+  # Build .mcp.json: copy project's if present, layer provider MCP on top.
+  # No git — just file copy.
+  if [[ -f "$PWD/.mcp.json" ]]; then
+    cp "$PWD/.mcp.json" "$RALPH_WORKTREE_DIR/.mcp.json"
+  else
+    echo '{}' > "$RALPH_WORKTREE_DIR/.mcp.json"
+  fi
+
+  if [[ -n "${PROVIDER_MCP_NAME:-}" ]] && command -v "${PROVIDER_MCP_CMD:-}" &>/dev/null; then
+    jq --arg n "$PROVIDER_MCP_NAME" --arg c "$PROVIDER_MCP_CMD" --arg agent "$agent_key" \
+      '.mcpServers[$n] = {"command": $c, "env": {"RALPH_AGENT_KEY": $agent}}' "$RALPH_WORKTREE_DIR/.mcp.json" \
+      > "$RALPH_WORKTREE_DIR/.mcp.json.tmp" && mv "$RALPH_WORKTREE_DIR/.mcp.json.tmp" "$RALPH_WORKTREE_DIR/.mcp.json"
+  fi
+
+  # Run project-specific verifier-context.sh from the project overlay dir.
+  # Stdout becomes RALPH_WORKTREE_CONTEXT (consumed by loop_build_context).
+  local project_name="${RALPH_PROJECT:-$(basename "$PWD")}"
+  local project_overlay="$HOME/.ralph/projects/$project_name"
+  local setup_cmd="${RALPH_VERIFIER_CONTEXT_SCRIPT:-}"
+  if [[ -z "$setup_cmd" && -f "$project_overlay/scripts/verifier-context.sh" ]]; then
+    setup_cmd="bash \"$project_overlay/scripts/verifier-context.sh\" \"$RALPH_WORKTREE_DIR\""
+  fi
+  if [[ -n "$setup_cmd" ]]; then
+    ralph_log "Running verifier context script: $setup_cmd"
+    local setup_output=""
+    setup_output=$(cd "$RALPH_WORKTREE_DIR" && eval "$setup_cmd") || {
+      ralph_error "Verifier context script failed (exit $?). Continuing anyway."
+    }
+    if [[ -n "$setup_output" ]]; then
+      RALPH_WORKTREE_CONTEXT="$setup_output"
+      ralph_log "Verifier context captured (${#setup_output} bytes)"
+    fi
+  else
+    cat >&2 <<EOF
+
+═══════════════════════════════════════════════════════════════
+ Verifier is not set up for this project: $project_name
+═══════════════════════════════════════════════════════════════
+
+The verifier agent needs a project-specific context script that declares:
+  • Staging URL + smoke endpoint
+  • Test user credentials
+  • Server log access (Vercel, PostHog, etc.)
+
+Expected location:
+  $project_overlay/scripts/verifier-context.sh
+
+Run the setup skill from this project directory:
+  /setup-verifier
+
+Or set RALPH_VERIFIER_CONTEXT_SCRIPT to point at a custom script.
+
+EOF
+    rm -rf "$RALPH_WORKTREE_DIR" 2>/dev/null
+    return 1
+  fi
+}
+
 # ralph_cleanup_worktree <work_dir>
 # Removes a worktree directory and its tracking branch.
+# For verifier (non-git) CWDs, falls back to plain rm -rf.
 ralph_cleanup_worktree() {
   local work_dir="$1"
-  [[ -d "$work_dir" ]] && git worktree remove "$work_dir" --force 2>/dev/null || true
-  git worktree prune 2>/dev/null || true
+  [[ -z "$work_dir" ]] && return
+  if git -C "$work_dir" rev-parse --git-dir &>/dev/null; then
+    git worktree remove "$work_dir" --force 2>/dev/null || true
+    git worktree prune 2>/dev/null || true
+  else
+    rm -rf "$work_dir" 2>/dev/null || true
+  fi
 }
 
 # ralph_cleanup_worktree_processes <work_dir>
