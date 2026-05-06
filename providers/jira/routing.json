@@ -32,7 +32,7 @@
         "description_condition": "empty_or_todo_or_label_needs_planning",
         "exclude_blocked": true,
         "blocker_check": "no_needs_planning",
-        "order_by": "created_desc"
+        "order_by": "priority_desc"
       },
       "script": "bin/afk-planner",
       "prompt": "prompts/planner.md"
