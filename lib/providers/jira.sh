@@ -83,7 +83,8 @@ provider_get_unresolved_blocker_keys() {
         [[ -n "$key_list" ]] && key_list="$key_list, "
         key_list="$key_list\"$k\""
       done
-      local jql="key in ($key_list) AND labels = \"needs-planning\""
+      # Blocker is unresolved if it still has needs-planning OR has not reached Done.
+      local jql="key in ($key_list) AND (labels = \"needs-planning\" OR statusCategory != Done)"
       local body
       body=$(jq -n --arg jql "$jql" '{"jql":$jql,"maxResults":50,"fields":["key"]}')
       local tmp
@@ -126,15 +127,16 @@ provider_check_blockers() {
 
   case "$mode" in
     no_needs_planning)
-      # Blocker is "cleared" once it no longer has the needs-planning label.
+      # Blocker is "cleared" only when it has reached Done AND no longer has
+      # the needs-planning label. Either condition unmet → still blocking.
       # Since Jira search doesn't return labels for linked issues, we query
-      # blockers that still have needs-planning via a single JQL call.
+      # the blocker set with a single JQL call covering both conditions.
       local key_list=""
       for k in ${=blocker_keys}; do
         [[ -n "$key_list" ]] && key_list="$key_list, "
         key_list="$key_list\"$k\""
       done
-      local jql="key in ($key_list) AND labels = \"needs-planning\""
+      local jql="key in ($key_list) AND (labels = \"needs-planning\" OR statusCategory != Done)"
       local body
       body=$(jq -n --arg jql "$jql" '{"jql":$jql,"maxResults":1,"fields":["key"]}')
       local tmp
@@ -413,10 +415,12 @@ provider_rules_to_query() {
   # order_by
   local order_by
   order_by=$(echo "$rules" | jq -r '.order_by // "null"')
+  # Secondary sort by createdDate ASC keeps blocker chains draining oldest-first
+  # when priorities tie (e.g. PRD task chain vs. tracer bullets at the same priority).
   case "$order_by" in
-    priority_desc) query="$query ORDER BY priority DESC" ;;
+    priority_desc) query="$query ORDER BY priority DESC, createdDate ASC" ;;
     created_desc)  query="$query ORDER BY createdDate DESC" ;;
-    updated_desc)  query="$query ORDER BY updated DESC" ;;
+    updated_desc)  query="$query ORDER BY updated DESC, createdDate ASC" ;;
   esac
 
   echo "$query"
