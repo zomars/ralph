@@ -27,3 +27,4 @@ ralph_save_session_log() {
   cp "$session_log" "$log_path"
   ralph_log "Session log: $log_path"
 }
+

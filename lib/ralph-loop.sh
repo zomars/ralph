@@ -116,7 +116,6 @@ ralph_run_loop() {
   LOOP_WORK_FILE="/tmp/ralph-${agent_key}-${instance_num}-work.json"
 
   _loop_die() {
-    ralph_save_session_log "$session_log" "$agent_key" "$instance_num" "$last_task_key"
     ralph_titlebar_cleanup
     printf "\nShutting down.\n"
     rm -f "$tmpfile" "$LOOP_WORK_FILE" 2>/dev/null
@@ -130,7 +129,7 @@ ralph_run_loop() {
     exit 1
   }
 
-  trap 'ralph_save_session_log "$session_log" "$agent_key" "$instance_num" "$last_task_key"; ralph_titlebar_cleanup; rm -f "$tmpfile" "$LOOP_WORK_FILE" 2>/dev/null; rm -rf "$instance_slot" 2>/dev/null; [[ "$uses_worktree" == "true" ]] && ralph_cleanup_worktree "$work_dir"; [[ -n "$stream_pgid" ]] && kill -9 -$stream_pgid 2>/dev/null || true; [[ -n "$stream_pid" ]] && kill -9 -$stream_pid 2>/dev/null || true; [[ -n "$child_pid" ]] && kill -9 -$child_pid 2>/dev/null || true' EXIT
+  trap 'ralph_titlebar_cleanup; rm -f "$tmpfile" "$LOOP_WORK_FILE" 2>/dev/null; rm -rf "$instance_slot" 2>/dev/null; [[ "$uses_worktree" == "true" ]] && ralph_cleanup_worktree "$work_dir"; [[ -n "$stream_pgid" ]] && kill -9 -$stream_pgid 2>/dev/null || true; [[ -n "$stream_pid" ]] && kill -9 -$stream_pid 2>/dev/null || true; [[ -n "$child_pid" ]] && kill -9 -$child_pid 2>/dev/null || true' EXIT
 
   # ─── Early exit for bounded runs with no work (before titlebar clears screen)
   local has_prefetch=0
@@ -217,6 +216,18 @@ ralph_run_loop() {
     iteration=$((iteration + 1))
     tmpfile=$(mktemp)
 
+    # Per-iteration archive — streamed live during the iteration so a kill -9
+    # (OOM, panic) still leaves partial output on disk. Overwritten with the
+    # canonical filtered output once the iteration completes.
+    local iter_archive=""
+    if [[ -n "${RALPH_LOG_DIR:-}" ]]; then
+      local iter_log_dir="${RALPH_LOG_DIR%/}/${agent_key}-${instance_num}"
+      mkdir -p "$iter_log_dir"
+      local iter_suffix="${LOOP_TASK_KEY:+-$LOOP_TASK_KEY}"
+      iter_archive="$iter_log_dir/$(date '+%Y-%m-%dT%H:%M:%S')${iter_suffix}.log"
+      : > "$iter_archive"
+    fi
+
     local display="${LOOP_TASK_DISPLAY:-$LOOP_TASK_KEY}"
     ralph_titlebar_update "${(U)agent_name} #$instance_num | $model_short | Iteration $iteration | $display | $(date '+%H:%M:%S')"
     echo "------- ${(U)agent_name} #$instance_num ITERATION $iteration ($display) --------"
@@ -258,9 +269,12 @@ PROMPT_EOF
     # Stream output for real-time display and session log
     local stream_pid=""
     local stream_pgid=""
+    local -a tee_targets
+    tee_targets=( "$session_log" )
+    [[ -n "$iter_archive" ]] && tee_targets+=( "$iter_archive" )
     {
       tail -f -n +1 "$raw_output" | grep --line-buffered '^{' \
-        | tee -a "$session_log" | jq --unbuffered -rj "$stream_text" &
+        | tee -a "${tee_targets[@]}" | jq --unbuffered -rj "$stream_text" &
     } 2>/dev/null
     stream_pid=$!
     # In zsh MONITOR mode, $! is the last pipeline member (jq) but the PGID
@@ -320,6 +334,11 @@ PROMPT_EOF
     local result
     result=$(jq -r "$final_result" "$tmpfile" 2>/dev/null || true)
     last_task_key=$(ralph_extract_task_key "$tmpfile")
+
+    # Overwrite the live-streamed archive with the canonical filtered output
+    # (live tee may lag behind raw_output). On kill -9 mid-iteration we never
+    # reach here, but the partial live archive already exists for postmortem.
+    [[ -n "$iter_archive" && -s "$tmpfile" ]] && cp "$tmpfile" "$iter_archive"
 
     # Detect empty iterations (Claude crashed or produced no output)
     if [[ ! -s "$tmpfile" ]]; then
