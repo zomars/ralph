@@ -83,8 +83,10 @@ provider_get_unresolved_blocker_keys() {
         [[ -n "$key_list" ]] && key_list="$key_list, "
         key_list="$key_list\"$k\""
       done
-      # Blocker is unresolved if it still has needs-planning OR has not reached Done.
-      local jql="key in ($key_list) AND (labels = \"needs-planning\" OR statusCategory != Done)"
+      # Blocker is unresolved only if it still needs planning. Status is the
+      # implementer/reviewer/merger's concern — once predecessors are planned,
+      # the planner can plan dependents in parallel with downstream work.
+      local jql="key in ($key_list) AND labels = \"needs-planning\""
       local body
       body=$(jq -n --arg jql "$jql" '{"jql":$jql,"maxResults":50,"fields":["key"]}')
       local tmp
@@ -127,16 +129,15 @@ provider_check_blockers() {
 
   case "$mode" in
     no_needs_planning)
-      # Blocker is "cleared" only when it has reached Done AND no longer has
-      # the needs-planning label. Either condition unmet → still blocking.
-      # Since Jira search doesn't return labels for linked issues, we query
-      # the blocker set with a single JQL call covering both conditions.
+      # Blocker is "cleared" once it no longer has the needs-planning label.
+      # Status is downstream agents' concern — the planner only needs its
+      # predecessors planned, not implemented or merged.
       local key_list=""
       for k in ${=blocker_keys}; do
         [[ -n "$key_list" ]] && key_list="$key_list, "
         key_list="$key_list\"$k\""
       done
-      local jql="key in ($key_list) AND (labels = \"needs-planning\" OR statusCategory != Done)"
+      local jql="key in ($key_list) AND labels = \"needs-planning\""
       local body
       body=$(jq -n --arg jql "$jql" '{"jql":$jql,"maxResults":1,"fields":["key"]}')
       local tmp
