@@ -765,7 +765,7 @@ Execute your workflow now. Start with Step 1."
     # Fallback: latest saved session log
     local log_dir="${RALPH_LOG_DIR%/}/${agent_key}-${instance_num}"
     if [[ -d "$log_dir" ]]; then
-      log_file=$(ls -t "$log_dir"/*-session.log 2>/dev/null | head -1)
+      log_file=$(ls -t "$log_dir"/*.log 2>/dev/null | head -1)
     fi
   fi
 
