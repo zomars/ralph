@@ -35,27 +35,49 @@ If the task has label `needs-planning` AND existing comments from RALPH agents c
 
 ### Standard planning
 
-**Goal**: Turn a vague idea into a workable specification using tracer-bullet vertical slices.
+**Goal**: Turn a vague idea into a workable specification using tracer-bullet vertical slices. Default to **no split**. Split only when necessary.
 
 1.  **Analyze**: Read the Summary.
 2.  **Context**: Explore the codebase and check other tickets to understand what "fix X" or "implement Y" means. Identify durable architectural decisions (routes, schema, key models, auth approach, third-party boundaries).
-3.  **Draft vertical slices**: Break the task into **tracer bullet** phases. Each phase is a thin vertical slice that cuts through ALL integration layers end-to-end (schema → API → UI → tests), NOT a horizontal slice of one layer.
-    - Each slice delivers a narrow but COMPLETE path through every layer
-    - A completed slice is demoable or verifiable on its own
-    - **Split aggressively** — prefer many small subtasks over few large ones. Each subtask should be completable in a single agent iteration.
-    - Do NOT include specific file names, function names, or implementation details likely to change as later phases are built
-    - DO include durable decisions: route paths, schema shapes, data model names
-    - If the task is truly trivial (single-file fix), skip splitting
-4.  **Create subtasks**: For each vertical slice, create a subtask under the parent issue using `createJiraIssue` with `parentKey` set to the current task's key. Each subtask gets:
-    - **Summary**: Short, action-oriented title
-    - **Description**: What to build (end-to-end behavior, not layer-by-layer) + acceptance criteria checklist
-5.  **Create dependency links** using `createIssueLink` with link type "Blocks":
-    - **Sequential chaining**: Each subtask is blocked by the previous one (subtask-2 blocked by subtask-1, etc.). The first subtask has no blockers.
-    - **Children block parent**: Every subtask must **block** the parent issue. This prevents agents from picking up the parent while any subtask is still incomplete.
+3.  **Decide whether to split**. Ask: *can one implementer iteration ship this end-to-end?* If yes → **no subtasks**, skip to Step 6. Only split when at least one holds:
+    - Task spans multiple independent user-visible behaviors.
+    - Task crosses a hard architectural seam (new service; schema migration + UI consumer).
+    - Task is too large for one implementer iteration AND cannot be tightened.
+4.  **Draft vertical slices** (only if Step 3 says split):
+    - Each slice is a thin vertical slice cutting through ALL integration layers end-to-end (schema → API → UI → tests), NOT a horizontal slice of one layer. A slice may span multiple files/layers — that is expected.
+    - Each slice is demoable / verifiable on its own and independently shippable.
+    - **Prefer fewer thick slices over many thin ones.** Do not split aggressively.
+    - For each slice record: **Title**, **Type (HITL/AFK)**, **Blocked by** (real blockers only), **Acceptance criteria** as a checklist.
+    - Prefer **AFK** (no human gate). Mark a slice **HITL** only when it requires human input: architecture decision, design review, credentials/secrets.
+    - Do NOT include specific file names, function names, or implementation details likely to change as later phases are built. DO include durable decisions: route paths, schema shapes, data model names.
+5.  **Create subtasks** using `createJiraIssue` with `parentKey` set to the current task's key. Subtask description template:
+
+    ```
+    ## What to build
+    <end-to-end behavior, not layer-by-layer>
+
+    ## Acceptance criteria
+    - [ ] ...
+    - [ ] ...
+
+    ## Blocked by
+    - <KEY> (or "None - can start immediately")
+
+    ## Type
+    AFK | HITL
+    ```
+
+    For HITL subtasks: also add label `needs-input` at creation.
+
+    Then create dependency links via `createIssueLink` with link type "Blocks":
+    - **Only link `Blocks` when there is a real dependency** (slice B reads schema/route created by slice A). Independent slices stay unblocked so implementers can work them in parallel.
+    - **Do NOT** chain subtasks sequentially by default.
+    - **Do NOT** make children block the parent. (`routing.json` already prevents the planner from re-picking a parent with open subtasks.)
+    - If an AFK subtask depends on a HITL subtask, link the HITL one as `Blocks` so the AFK work waits until a human resolves it.
 6.  **Update parent description**: Set the parent's description to an overview with:
     - **Architectural decisions**: Durable decisions that apply across all subtasks (routes, schema, models)
-    - **Subtask summary**: Numbered list of subtask keys and titles for quick reference
-7.  **Unknowns?**: If you genuinely don't know what to do:
+    - **Subtask summary**: Numbered list of subtask keys and titles for quick reference (omit if no subtasks created)
+7.  **Unknowns?**: If you genuinely don't know what to do at the parent level:
     - Add label `needs-input`.
     - Add comment: "@[User] I need clarification on X."
     - STOP.
