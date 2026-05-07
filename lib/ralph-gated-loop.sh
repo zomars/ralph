@@ -24,7 +24,9 @@ ralph_gated_loop() {
   }
 
   loop_uses_worktree() {
-    jq -r ".agents.${_agent_key}.rules.uses_worktree // true" "$(ralph_get_routing_json)"
+    # Note: jq's `//` treats `false` as falsy, so we can't use it for boolean defaults.
+    jq -r ".agents.${_agent_key}.rules | if has(\"uses_worktree\") then .uses_worktree else true end" \
+      "$(ralph_get_routing_json)"
   }
 
   loop_fetch_work() {
