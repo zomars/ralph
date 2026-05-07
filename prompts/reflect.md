@@ -20,6 +20,7 @@ Produce the **complete replacement** learnings file. Do NOT append — output th
 4. Rules must be **reusable across iterations** — no ticket keys or one-off facts, but project-specific operational knowledge (URLs, login steps, dev commands) is encouraged.
 5. Merge similar rules rather than keeping duplicates.
 6. Keep rules concise — one line each.
+7. When the session ended without `<promise>COMPLETE</promise>` (max_turns, abort, crash), prioritise rules that would have saved turns earlier in the iteration — rediscovery of project layout, defensive snapshotting, redundant exploration.
 
 ## Output format
 Wrap output in a `<learnings>` block:

@@ -97,6 +97,21 @@ $(cat "$provider_instructions")"
 $(cat "$learnings_file")"
   fi
 
+  # Inject per-ticket scratchpad (paths/IDs/progress from prior iterations on
+  # the same ticket). Keyed on LOOP_TASK_KEY, exported by loop_pick_work.
+  if [[ -n "${LOOP_TASK_KEY:-}" ]]; then
+    local scratch_file
+    scratch_file=$(ralph_get_scratch_file "$agent_key" "$LOOP_TASK_KEY" 2>/dev/null) || scratch_file=""
+    if [[ -n "$scratch_file" && -f "$scratch_file" && -s "$scratch_file" ]]; then
+      full_system_prompt="$full_system_prompt
+
+# NOTES FROM PRIOR ITERATIONS ON $LOOP_TASK_KEY
+$(cat "$scratch_file")
+
+(These notes were extracted from your prior iterations on this ticket. Use them to skip rediscovery — paths, IDs, and progress already established are recorded here.)"
+    fi
+  fi
+
   case "$agent_cli" in
     claude)
       local model

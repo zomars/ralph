@@ -369,6 +369,16 @@ PROMPT_EOF
       reflect_pid=$!
     fi
 
+    # Launch per-ticket scratchpad extraction in parallel (independent of reflect)
+    local notes_pid=""
+    if [[ -s "$tmpfile" && -n "$LOOP_TASK_KEY" ]]; then
+      local notes_input
+      notes_input=$(mktemp)
+      cp "$tmpfile" "$notes_input"
+      ( ralph_extract_ticket_notes "$agent_key" "$instance_num" "$notes_input" "$LOOP_TASK_KEY"; rm -f "$notes_input" ) &
+      notes_pid=$!
+    fi
+
     rm -f "$tmpfile"
     tmpfile=""
 

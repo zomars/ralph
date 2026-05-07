@@ -22,9 +22,18 @@ ralph_reflect() {
 
   mkdir -p "$learnings_dir"
 
-  # Truncate session log to last 50K chars
-  local session_tail
-  session_tail=$(tail -c 50000 "$session_tmpfile")
+  # Feed the full iteration log when it fits, fall back to tail for pathological
+  # logs. The early region of the iteration is where rediscovery/wasted-turn
+  # patterns live — tailing 50K hides them, especially on max_turns runs.
+  local max_bytes="${RALPH_REFLECT_MAX_BYTES:-2097152}"
+  local session_size
+  session_size=$(wc -c < "$session_tmpfile" 2>/dev/null | tr -d ' ')
+  local session_full
+  if [[ -n "$session_size" ]] && (( session_size > max_bytes )); then
+    session_full=$(tail -c "$max_bytes" "$session_tmpfile")
+  else
+    session_full=$(cat "$session_tmpfile")
+  fi
 
   # Build message with current learnings + session
   local current_learnings=""
@@ -39,8 +48,8 @@ ralph_reflect() {
 ## Current learnings
 ${current_learnings:-<none>}
 
-## Session log (last 50K chars)
-$session_tail
+## Session log
+$session_full
 MSG_EOF
 
   local reflect_model="${RALPH_REFLECT_MODEL:-claude-haiku-4-5-20251001}"

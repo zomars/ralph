@@ -13,6 +13,7 @@ source "$_ralph_lib_dir/ralph-worktree.sh"
 source "$_ralph_lib_dir/ralph-titlebar.sh"
 source "$_ralph_lib_dir/ralph-session.sh"
 source "$_ralph_lib_dir/ralph-reflect.sh"
+source "$_ralph_lib_dir/ralph-scratch.sh"
 
 # ─── Init ─────────────────────────────────────────────────────────────────────
 
