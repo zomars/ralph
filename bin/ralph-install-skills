@@ -1,0 +1,36 @@
+#!/bin/zsh
+# ralph-install-skills — symlink ralph-owned skills into ~/.claude/skills/
+#
+# Run automatically by `npm install` / `npm link` via the package.json
+# postinstall hook. Safe to re-run: existing symlinks are refreshed; conflicting
+# real directories are preserved (skipped with a warning).
+#
+# Each subdir of $RALPH_HOME/skills/ becomes a symlink at ~/.claude/skills/<name>.
+
+set -e
+
+RALPH_HOME="${RALPH_HOME:-$(cd "$(dirname "$(realpath "$0")")/.." && pwd)}"
+SKILLS_SRC="$RALPH_HOME/skills"
+SKILLS_DST="$HOME/.claude/skills"
+
+[[ -d "$SKILLS_SRC" ]] || exit 0  # no skills shipped — nothing to do
+
+mkdir -p "$SKILLS_DST"
+
+for src in "$SKILLS_SRC"/*/; do
+  [[ -d "$src" ]] || continue
+  name=$(basename "$src")
+  dst="$SKILLS_DST/$name"
+
+  if [[ -L "$dst" ]]; then
+    # Existing symlink — refresh it (target may have moved if ralph was relocated)
+    rm "$dst"
+    ln -s "$src" "$dst"
+    echo "ralph: refreshed skill symlink: $dst -> $src"
+  elif [[ -e "$dst" ]]; then
+    echo "ralph: skill '$name' already exists at $dst (not a symlink) — skipping. Remove it manually to let ralph manage it." >&2
+  else
+    ln -s "$src" "$dst"
+    echo "ralph: installed skill: $dst -> $src"
+  fi
+done

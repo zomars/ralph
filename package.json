@@ -8,6 +8,9 @@
     "ralph-jira-mcp": "./providers/jira/mcp-server.mjs",
     "ralph-linear-mcp": "./providers/linear/mcp-server.mjs"
   },
+  "scripts": {
+    "postinstall": "./bin/ralph-install-skills"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",
     "marked": "^15.0.0",
