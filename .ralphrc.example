@@ -30,6 +30,13 @@ export RALPH_POLL_INTERVAL=5
 # Auto-detected: if unset and scripts/worktree-setup.sh exists, it runs automatically.
 # export RALPH_WORKTREE_SETUP="bash scripts/worktree-setup.sh && npm install"
 
+# PR Reviewer GitHub identity override.
+# Empty = use the operator's existing gh auth (same identity as all other ralph agents).
+# Set to a fine-grained PAT (pull_requests:write + contents:read) for a dedicated bot user
+# (e.g. ralph-pr-reviewer) so reviews are attributable. Scoped via GH_TOKEN to the
+# pr-reviewer process only — does not affect implementer/fixer/merger.
+# export RALPH_PR_REVIEWER_TOKEN=""
+
 # Per-agent model override (haiku, sonnet, opus, or raw model ID)
 # Built-in defaults: planner=opus, implementer/reviewer/tester/refactor/fixer=sonnet, documenter/merger=haiku
 # export RALPH_MODEL="sonnet"            # global override for all agents

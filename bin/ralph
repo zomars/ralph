@@ -25,6 +25,7 @@ Agent commands (Jira-driven):
 GitHub commands:
   fixer             Run the Fixer agent (responds to PR review feedback)
   merger            Run the Merger agent (auto-merges approved PRs)
+  pr-reviewer       Run the PR Reviewer agent (inline diff review on green non-draft PRs)
 
 Direct invocation:
   run <agent> <key> Run an agent on a specific task, bypassing backlog query
@@ -120,7 +121,7 @@ cmd_status() {
   done < <(jq -r '.agents | keys[]' "$routing_json")
 
   # GitHub-gated agents (not in routing.json)
-  local github_agents=(fixer merger)
+  local github_agents=(fixer merger pr-reviewer)
 
   # All agents in display order
   local all_agents=("${jira_agents[@]}" "${github_agents[@]}")
@@ -139,9 +140,11 @@ cmd_status() {
   if command -v gh &>/dev/null && gh auth status &>/dev/null; then
     task_counts[fixer]=$(ralph_fetch_fixer_prs | jq 'length')
     task_counts[merger]=$(ralph_fetch_mergeable_prs | jq 'length')
+    task_counts[pr-reviewer]=$(ralph_fetch_pr_reviewer_prs | jq 'length')
   else
     task_counts[fixer]="?"
     task_counts[merger]="?"
+    task_counts[pr-reviewer]="?"
   fi
 
   # ── Count running instances per agent ───────────────────────────────────
@@ -282,6 +285,7 @@ agent_display_name() {
     documenter)   echo "Documenter" ;;
     fixer)        echo "Fixer" ;;
     merger)       echo "Merger" ;;
+    pr-reviewer)  echo "PR Reviewer" ;;
   esac
 }
 
@@ -468,16 +472,16 @@ cmd_debug() {
   if [[ -z "$agent_key" ]]; then
     echo "Usage: ralph debug <agent> [instance] [-f|--follow] [-n|--lines N] [--raw]"
     echo ""
-    echo "Agents: planner, implementer, reviewer, tester, verifier, refactor, documenter, fixer, merger"
+    echo "Agents: planner, implementer, reviewer, tester, verifier, refactor, documenter, fixer, merger, pr-reviewer"
     exit 1
   fi
 
   # Validate agent name
   case "$agent_key" in
-    planner|implementer|reviewer|tester|verifier|refactor|documenter|fixer|merger) ;;
+    planner|implementer|reviewer|tester|verifier|refactor|documenter|fixer|merger|pr-reviewer) ;;
     *)
       echo "Unknown agent: $agent_key"
-      echo "Agents: planner, implementer, reviewer, tester, verifier, refactor, documenter, fixer, merger"
+      echo "Agents: planner, implementer, reviewer, tester, verifier, refactor, documenter, fixer, merger, pr-reviewer"
       exit 1
       ;;
   esac
@@ -857,7 +861,8 @@ case "$subcmd" in
   watchdog)            cmd_watchdog "$@" ;;
   planner|implementer|reviewer|tester|verifier|refactor|documenter)
                       cmd_agent "$subcmd" "$@" ;;
-  fixer|merger)       cmd_github_agent "$subcmd" "$@" ;;
+  fixer|merger|pr-reviewer)
+                      cmd_github_agent "$subcmd" "$@" ;;
   *)
     echo "Unknown command: $subcmd"
     echo "Run 'ralph help' for usage."

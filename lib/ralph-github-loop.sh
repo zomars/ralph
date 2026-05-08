@@ -157,13 +157,74 @@ ralph_check_github_prs() {
   ralph_fetch_fixer_prs | jq 'length'
 }
 
+ralph_fetch_pr_reviewer_prs() {
+  # Fetch open, non-draft PRs with green CI that this user has not yet reviewed
+  # at the latest commit. Both Ralph- and human-authored PRs are in scope.
+  local repo bot_user
+  repo=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null) || repo=""
+  if [[ -z "$repo" ]]; then
+    echo "[]"
+    return
+  fi
+  bot_user=$(gh api user --jq '.login' 2>/dev/null) || bot_user=""
+
+  local owner="${repo%%/*}"
+  local name="${repo##*/}"
+
+  gh api graphql -f query="
+    {
+      search(query: \"is:pr is:open draft:false repo:$repo\", type: ISSUE, first: 50) {
+        nodes {
+          ... on PullRequest {
+            number
+            title
+            url
+            headRefName
+            baseRefName
+            isDraft
+            author { login }
+            latestReviews(first: 20) {
+              nodes { author { login } submittedAt }
+            }
+            commits(last: 1) {
+              nodes {
+                commit {
+                  committedDate
+                  statusCheckRollup { state }
+                }
+              }
+            }
+          }
+        }
+      }
+    }" 2>/dev/null | jq --arg bot "$bot_user" --arg owner "$owner" --arg name "$name" '
+      [.data.search.nodes[] |
+        select(.isDraft == false) |
+        select(.commits.nodes[0].commit.statusCheckRollup.state == "SUCCESS") |
+        (.commits.nodes[0].commit.committedDate // "1970-01-01T00:00:00Z") as $lastCommit |
+        ([.latestReviews.nodes[] | select(.author.login == $bot) | .submittedAt] | max // "1970-01-01T00:00:00Z") as $myLastReview |
+        select($lastCommit > $myLastReview) |
+        {
+          number,
+          title,
+          url,
+          headRefName,
+          baseRefName,
+          author: .author.login,
+          owner: $owner,
+          name: $name
+        }
+      ]' 2>/dev/null || echo "[]"
+}
+
 # ─── Agent-specific dispatch helpers ─────────────────────────────────────────
 
 _ralph_github_fetch_for_agent() {
   case "$1" in
-    fixer)  ralph_fetch_fixer_prs ;;
-    merger) ralph_fetch_mergeable_prs ;;
-    *)      ralph_fetch_fixer_prs ;;
+    fixer)       ralph_fetch_fixer_prs ;;
+    merger)      ralph_fetch_mergeable_prs ;;
+    pr-reviewer) ralph_fetch_pr_reviewer_prs ;;
+    *)           ralph_fetch_fixer_prs ;;
   esac
 }
 
@@ -193,14 +254,20 @@ Start with Step 1 — checkout the branch and assess what needs fixing.${worktre
 $target_pr
 Start with Step 1 — verify merge conditions."
       ;;
+    pr-reviewer)
+      echo "You are RALPH_PR_REVIEWER, instance $instance_num. Project root: $project_dir. Review this PR now (read-only — do NOT checkout, do NOT run tests):
+$target_pr
+Start with Step 1 — load context from the PR data above."
+      ;;
   esac
 }
 
 _ralph_github_no_work_label() {
   case "$1" in
-    fixer)  echo "fixes" ;;
-    merger) echo "merges" ;;
-    *)      echo "work" ;;
+    fixer)       echo "fixes" ;;
+    merger)      echo "merges" ;;
+    pr-reviewer) echo "reviews" ;;
+    *)           echo "work" ;;
   esac
 }
 
@@ -251,6 +318,17 @@ ralph_github_loop() {
   # ─── Callbacks ──────────────────────────────────────────────────────────
 
   loop_init() {
+    # Per-agent GitHub identity override. When set, every gh / gh api call in
+    # this loop process (fetch + agent invocation) authenticates as the bot
+    # account instead of the operator's keyring user.
+    case "$_agent_key" in
+      pr-reviewer)
+        if [[ -n "${RALPH_PR_REVIEWER_TOKEN:-}" ]]; then
+          export GH_TOKEN="$RALPH_PR_REVIEWER_TOKEN"
+        fi
+        ;;
+    esac
+
     # Validate gh CLI
     if ! command -v gh &>/dev/null; then
       ralph_error "gh CLI is not installed. Install it: https://cli.github.com/"
@@ -272,6 +350,7 @@ ralph_github_loop() {
   loop_uses_worktree() {
     case "$_agent_key" in
       fixer|merger) echo "true" ;;
+      pr-reviewer)  echo "false" ;;
       *)            echo "false" ;;
     esac
   }
