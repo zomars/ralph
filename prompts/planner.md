@@ -69,12 +69,13 @@ If the task has label `needs-planning` AND existing comments from RALPH agents c
 
     For HITL subtasks: also add label `needs-input` at creation.
 
-    Then create dependency links via `createIssueLink` with link type "Blocks":
-    - **Direction**: `inwardIssue` is the **blocker** (the one that must finish first), `outwardIssue` is the **blocked** issue. Read it as: "`outwardIssue` is blocked by `inwardIssue`." If A must ship before B, call with `inwardIssue=A, outwardIssue=B`. Verify after creation by re-reading the parent — `inwardIssue` entries on the parent are its blockers.
-    - **Reserve `Blocks` for real dependencies** (slice B reads schema/route created by slice A) so independent slices ship in parallel.
+    Then create dependency links via `createBlockedByLink({ blockedKey, blockerKey })`. Ralph speaks dependencies in **one direction only**: read every link as "`blockedKey` is blocked by `blockerKey`." Never phrase it as "blockerKey blocks blockedKey" — use this single direction so you cannot wire links backwards. The raw `createIssueLink` / `createRelation` tools refuse blocker types and will return an error.
+
+    - **Reserve blocker links for real dependencies** (slice B reads schema/route created by slice A) so independent slices ship in parallel.
     - **Leave siblings unlinked by default** — chain them only when one genuinely consumes another's output, because chaining serializes work that could run in parallel.
-    - **Skip child-blocks-parent links for real Jira sub-tasks** (created with `parentKey`). `routing.json` sets `skip_with_open_subtasks: true`, so the parent is already gated and an extra `Blocks` link is redundant.
-    - **Add child-blocks-parent links when children are peer Tasks** (separate issues with no `parentKey`, related only by `Blocks`). The sub-task gate is silent here, so `Blocks` is the only mechanism that keeps the parent out of the implementer queue until the children finish.
+    - **Hierarchy and dependency are separate graphs.** Parent/subtask answers "what's part of this work?"; "blocked by" answers "what must finish first?" One does not imply or replace the other — wire blocker links based on real dependencies, not on hierarchy.
+    - **Real Jira sub-tasks (created with `parentKey`)**: `routing.json` sets `skip_with_open_subtasks: true`, so the parent's queue position is already gated by open subtasks. You **may** skip the parent-is-blocked-by-child link if the only reason to add it would be queue gating. Still add it when the dependency is real (parent genuinely consumes the child's output) or when downstream tooling/reporting relies on the explicit edge.
+    - **Peer Tasks (separate issues with no `parentKey`)**: the sub-task gate is silent, so a "blocked by" link is the only mechanism that keeps the parent out of the implementer queue until the children finish — add it.
     - **Link a HITL blocker to its AFK consumer** when an AFK subtask depends on HITL work, so the AFK task waits for human resolution.
 6.  **Update parent description**: Set the parent's description to an overview with:
     - **Architectural decisions**: Durable decisions that apply across all subtasks (routes, schema, models)

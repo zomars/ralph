@@ -13,7 +13,8 @@ You are connected to Linear as the backlog provider. Use the following tools and
 - **Get workflow states**: `mcp__linear__getWorkflowStates` — list states for a team (use to discover `stateId` values)
 - **Get labels**: `mcp__linear__getTeamLabels` — list labels for a team (use to discover `labelId` values)
 - **Create issue**: `mcp__linear__createIssue` — create a new issue (optionally as a sub-issue of a parent)
-- **Create relation**: `mcp__linear__createRelation` — link two issues (`blocks`, `duplicate`, `related`)
+- **Create blocker link**: `mcp__linear__createBlockedByLink` — declare `blockedKey` is blocked by `blockerKey` (the only sanctioned way to wire blockers)
+- **Create relation**: `mcp__linear__createRelation` — link two issues for non-blocker types (`duplicate`, `related`); refuses `blocks`
 
 ## Status Names
 
@@ -67,10 +68,14 @@ The plan MUST go in the description field — never in a comment.
 
 Use issue relations to express task ordering. The **Planner** creates these when breaking down related work.
 
-**Create a "blocks" link** (task A blocks task B):
+Ralph speaks dependencies in **one direction only**: **"X is blocked by Y."** Never write or think "Y blocks X" — even though Linear supports that phrasing, Ralph agents use a single direction so relations cannot be wired backwards.
+
+**Create a "blocked by" link** (`ENG-2` is blocked by `ENG-1` — ENG-1 must finish first):
 ```
-mcp__linear__createRelation(issueId: "ENG-1", relatedIssueId: "ENG-2", type: "blocks")
+mcp__linear__createBlockedByLink(blockedKey: "ENG-2", blockerKey: "ENG-1")
 ```
+
+The raw `createRelation` tool refuses `type: "blocks"` and returns an error directing you here. Use it only for non-blocker types (related, duplicate).
 
 **Stacked PRs**: When starting a dependent task, the implementer checks issue relations for "blocks" links and looks for an active `ralph/<BLOCKER-KEY>` branch on the remote. If found, it branches from that branch instead of the default branch, and the PR targets the blocker's branch.
 

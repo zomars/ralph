@@ -16,7 +16,8 @@ Your assigned task is pre-loaded in the KB directory (path in initial message). 
 - **Get transitions**: `mcp__jira__getTransitionsForJiraIssue` — always discover available transitions before transitioning
 - **Transition status**: `mcp__jira__transitionJiraIssue`
 - **Create issue**: `mcp__jira__createJiraIssue` — create a new issue (subtask, task, story) with optional parent
-- **Create issue link**: `mcp__jira__createIssueLink` — link two issues (e.g. "Blocks")
+- **Create blocker link**: `mcp__jira__createBlockedByLink` — declare `blockedKey` is blocked by `blockerKey` (the only sanctioned way to wire blockers)
+- **Create issue link**: `mcp__jira__createIssueLink` — link two issues for non-blocker types ("Relates", "Duplicates", "Causes"); refuses "Blocks"
 - **Create remote link**: `mcp__jira__createRemoteLink` — attach an external URL (e.g. GitHub PR) to an issue
 - **Add attachment**: `mcp__jira__addAttachmentToJiraIssue` — upload a file (screenshot, log, etc.) to an issue
 
@@ -47,10 +48,14 @@ The plan MUST go in the description field — never in a comment.
 
 Use issue links to express task ordering. The **Planner** creates these when breaking down related work.
 
-**Create a "blocks" link** (task A blocks task B):
+Ralph speaks dependencies in **one direction only**: **"X is blocked by Y."** Never write or think "Y blocks X" — even though Jira supports that phrasing, Ralph agents use a single direction so links cannot be wired backwards.
+
+**Create a "blocked by" link** (`PROJ-B` is blocked by `PROJ-A` — A must finish first):
 ```
-mcp__jira__createIssueLink(linkType: "Blocks", outwardIssueKey: "PROJ-A", inwardIssueKey: "PROJ-B")
+mcp__jira__createBlockedByLink(blockedKey: "PROJ-B", blockerKey: "PROJ-A")
 ```
+
+The raw `createIssueLink` tool refuses `Blocks` linkType and returns an error directing you here. Use it only for non-blocker types (Relates, Duplicates, Causes).
 
 The implementer JQL excludes tasks whose blockers are still in "To Do" or "In Progress". Once a blocker reaches "In Review" (has an open PR) or "Done", the dependent task becomes available.
 

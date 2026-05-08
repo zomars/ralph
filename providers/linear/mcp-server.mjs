@@ -327,6 +327,11 @@ server.tool(
       .describe("Relation type: blocks, duplicate, or related"),
   },
   async ({ issueId, relatedIssueId, type }) => {
+    if (type === "blocks") {
+      return err(
+        "Refusing to create a 'blocks' relation via createRelation. Use createBlockedByLink({ blockedKey, blockerKey }) — Ralph speaks dependencies in one direction only ('X is blocked by Y') to avoid wiring relations backwards."
+      );
+    }
     try {
       const [src, tgt] = await Promise.all([
         linear(`query ($id: String!) { issue(id: $id) { id } }`, { id: issueId }),
@@ -345,6 +350,50 @@ server.tool(
         { issueId: src.issue.id, relatedIssueId: tgt.issue.id, type }
       );
       return ok(data.issueRelationCreate);
+    } catch (e) {
+      return err(e.message);
+    }
+  }
+);
+
+// 8b. Create "is blocked by" relation (the only sanctioned way to wire blockers)
+server.tool(
+  "createBlockedByLink",
+  "Declare that one Linear issue is blocked by another. Single-direction API: blockedKey 'is blocked by' blockerKey. Use this instead of createRelation for any blocker dependency.",
+  {
+    blockedKey: z
+      .string()
+      .describe("The dependent issue (cannot start until blockerKey is done)"),
+    blockerKey: z
+      .string()
+      .describe("The prerequisite issue (must finish first)"),
+  },
+  async ({ blockedKey, blockerKey }) => {
+    if (blockedKey === blockerKey) {
+      return err("blockedKey and blockerKey must differ.");
+    }
+    try {
+      const [blocker, blocked] = await Promise.all([
+        linear(`query ($id: String!) { issue(id: $id) { id } }`, { id: blockerKey }),
+        linear(`query ($id: String!) { issue(id: $id) { id } }`, { id: blockedKey }),
+      ]);
+      if (!blocker.issue) throw new Error(`Issue not found: ${blockerKey}`);
+      if (!blocked.issue) throw new Error(`Issue not found: ${blockedKey}`);
+
+      const data = await linear(
+        `mutation ($issueId: String!, $relatedIssueId: String!, $type: IssueRelationType!) {
+          issueRelationCreate(input: { issueId: $issueId, relatedIssueId: $relatedIssueId, type: $type }) {
+            success
+            issueRelation { type issue { identifier } relatedIssue { identifier } }
+          }
+        }`,
+        { issueId: blocker.issue.id, relatedIssueId: blocked.issue.id, type: "blocks" }
+      );
+      return ok({
+        success: true,
+        link: `${blockedKey} is blocked by ${blockerKey}`,
+        ...data.issueRelationCreate,
+      });
     } catch (e) {
       return err(e.message);
     }

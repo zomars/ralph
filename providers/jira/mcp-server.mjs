@@ -390,6 +390,11 @@ server.tool(
       .describe("The issue that is blocked by/caused by/etc."),
   },
   async ({ linkType, outwardIssueKey, inwardIssueKey }) => {
+    if (/^blocks?$/i.test(linkType)) {
+      return err(
+        "Refusing to create a 'Blocks' link via createIssueLink. Use createBlockedByLink({ blockedKey, blockerKey }) — Ralph speaks dependencies in one direction only ('X is blocked by Y') to avoid wiring inward/outward backwards."
+      );
+    }
     try {
       await jira("POST", "/rest/api/3/issueLink", {
         type: { name: linkType },
@@ -399,6 +404,38 @@ server.tool(
       return ok({
         success: true,
         link: `${outwardIssueKey} --[${linkType}]--> ${inwardIssueKey}`,
+      });
+    } catch (e) {
+      return err(e.message);
+    }
+  }
+);
+
+// 7b. Create "is blocked by" link (the only sanctioned way to wire blockers)
+server.tool(
+  "createBlockedByLink",
+  "Declare that one Jira issue is blocked by another. Single-direction API: blockedKey 'is blocked by' blockerKey. Use this instead of createIssueLink for any blocker dependency.",
+  {
+    blockedKey: z
+      .string()
+      .describe("The dependent issue (cannot start until blockerKey is done)"),
+    blockerKey: z
+      .string()
+      .describe("The prerequisite issue (must finish first)"),
+  },
+  async ({ blockedKey, blockerKey }) => {
+    if (blockedKey === blockerKey) {
+      return err("blockedKey and blockerKey must differ.");
+    }
+    try {
+      await jira("POST", "/rest/api/3/issueLink", {
+        type: { name: "Blocks" },
+        outwardIssue: { key: blockerKey },
+        inwardIssue: { key: blockedKey },
+      });
+      return ok({
+        success: true,
+        link: `${blockedKey} is blocked by ${blockerKey}`,
       });
     } catch (e) {
       return err(e.message);

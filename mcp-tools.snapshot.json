@@ -3,6 +3,7 @@
     "always": [
       "addAttachmentToJiraIssue",
       "addCommentToJiraIssue",
+      "createBlockedByLink",
       "createIssueLink",
       "createJiraIssue",
       "createRemoteLink",
@@ -33,6 +34,7 @@
   "providers/jira/mcp-server.mjs": [
     "addAttachmentToJiraIssue",
     "addCommentToJiraIssue",
+    "createBlockedByLink",
     "createIssueLink",
     "createJiraIssue",
     "createRemoteLink",
@@ -44,6 +46,7 @@
   ],
   "providers/linear/mcp-server.mjs": [
     "addComment",
+    "createBlockedByLink",
     "createIssue",
     "createRelation",
     "getIssue",
