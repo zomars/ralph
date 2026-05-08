@@ -70,10 +70,12 @@ If the task has label `needs-planning` AND existing comments from RALPH agents c
     For HITL subtasks: also add label `needs-input` at creation.
 
     Then create dependency links via `createIssueLink` with link type "Blocks":
-    - **Only link `Blocks` when there is a real dependency** (slice B reads schema/route created by slice A). Independent slices stay unblocked so implementers can work them in parallel.
-    - **Do NOT** chain subtasks sequentially by default.
-    - **Do NOT** make children block the parent. (`routing.json` already prevents the planner from re-picking a parent with open subtasks.)
-    - If an AFK subtask depends on a HITL subtask, link the HITL one as `Blocks` so the AFK work waits until a human resolves it.
+    - **Direction**: `inwardIssue` is the **blocker** (the one that must finish first), `outwardIssue` is the **blocked** issue. Read it as: "`outwardIssue` is blocked by `inwardIssue`." If A must ship before B, call with `inwardIssue=A, outwardIssue=B`. Verify after creation by re-reading the parent — `inwardIssue` entries on the parent are its blockers.
+    - **Reserve `Blocks` for real dependencies** (slice B reads schema/route created by slice A) so independent slices ship in parallel.
+    - **Leave siblings unlinked by default** — chain them only when one genuinely consumes another's output, because chaining serializes work that could run in parallel.
+    - **Skip child-blocks-parent links for real Jira sub-tasks** (created with `parentKey`). `routing.json` sets `skip_with_open_subtasks: true`, so the parent is already gated and an extra `Blocks` link is redundant.
+    - **Add child-blocks-parent links when children are peer Tasks** (separate issues with no `parentKey`, related only by `Blocks`). The sub-task gate is silent here, so `Blocks` is the only mechanism that keeps the parent out of the implementer queue until the children finish.
+    - **Link a HITL blocker to its AFK consumer** when an AFK subtask depends on HITL work, so the AFK task waits for human resolution.
 6.  **Update parent description**: Set the parent's description to an overview with:
     - **Architectural decisions**: Durable decisions that apply across all subtasks (routes, schema, models)
     - **Subtask summary**: Numbered list of subtask keys and titles for quick reference (omit if no subtasks created)
