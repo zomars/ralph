@@ -281,7 +281,9 @@ ralph_github_loop() {
   }
 
   loop_fetch_work() {
-    _ralph_github_fetch_for_agent "$_agent_key" > "$LOOP_WORK_FILE"
+    # Tolerate transient provider outages: fall back to an empty array so
+    # the loop sees zero work and re-polls instead of aborting under `set -e`.
+    _ralph_github_fetch_for_agent "$_agent_key" > "$LOOP_WORK_FILE" || echo '[]' > "$LOOP_WORK_FILE"
   }
 
   loop_count_work() {

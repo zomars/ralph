@@ -32,7 +32,10 @@ ralph_gated_loop() {
   loop_fetch_work() {
     local query
     query="$(ralph_get_query "$_agent_key")"
-    provider_fetch_tasks "$query" 10 > "$LOOP_WORK_FILE"
+    # Tolerate transient provider outages: provider_fetch_tasks writes
+    # `{"issues":[]}` on failure, so the loop sees zero work and re-polls
+    # instead of aborting under `set -e`.
+    provider_fetch_tasks "$query" 10 > "$LOOP_WORK_FILE" || true
   }
 
   loop_count_work() {
