@@ -197,24 +197,8 @@ ralph_fetch_pr_reviewer_prs() {
           }
         }
       }
-    }" 2>/dev/null | jq --arg bot "$bot_user" --arg owner "$owner" --arg name "$name" '
-      [.data.search.nodes[] |
-        select(.isDraft == false) |
-        select(.commits.nodes[0].commit.statusCheckRollup.state == "SUCCESS") |
-        (.commits.nodes[0].commit.committedDate // "1970-01-01T00:00:00Z") as $lastCommit |
-        ([.latestReviews.nodes[] | select(.author.login == $bot) | .submittedAt] | max // "1970-01-01T00:00:00Z") as $myLastReview |
-        select($lastCommit > $myLastReview) |
-        {
-          number,
-          title,
-          url,
-          headRefName,
-          baseRefName,
-          author: .author.login,
-          owner: $owner,
-          name: $name
-        }
-      ]' 2>/dev/null || echo "[]"
+    }" 2>/dev/null | jq --arg bot "$bot_user" --arg owner "$owner" --arg name "$name" \
+      -f "$RALPH_HOME/lib/pr-reviewer-filter.jq" 2>/dev/null || echo "[]"
 }
 
 # ─── Agent-specific dispatch helpers ─────────────────────────────────────────

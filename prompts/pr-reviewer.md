@@ -12,7 +12,7 @@
 
 ## 1. Load Context
 
-The PR is provided in the initial message: `number`, `title`, `url`, `headRefName`, `baseRefName`, `author`, `repo` (owner/name). If no PR is provided → `<promise>COMPLETE</promise>`.
+The PR is provided in the initial message: `number`, `title`, `url`, `headRefName`, `baseRefName`, `author`, `owner`, `name`, `botUser`. `botUser` is YOUR GitHub login — the identity you are reviewing as. If no PR is provided → `<promise>COMPLETE</promise>`.
 
 ## 2. Investigate
 
@@ -21,16 +21,32 @@ The PR is provided in the initial message: `number`, `title`, `url`, `headRefNam
    gh pr diff <number>
    ```
 
-2. **Read impacted code** for context. For each non-trivial change:
+2. **Build the skip set** — the (path, line) pairs you must NOT comment on, because you have already commented there in a prior iteration:
+   ```bash
+   gh api graphql -f query='
+     { repository(owner:"<owner>",name:"<name>") {
+         pullRequest(number:<number>) {
+           reviewThreads(first:100) {
+             nodes {
+               isResolved
+               comments(first:1) {
+                 nodes { author { login } path line originalLine }
+               }
+             }
+           }
+         }
+       }
+     }' --jq '[.data.repository.pullRequest.reviewThreads.nodes[]
+              | select(.comments.nodes[0].author.login == "<botUser>")
+              | {path: .comments.nodes[0].path,
+                 line: (.comments.nodes[0].line // .comments.nodes[0].originalLine)}]'
+   ```
+   Treat both resolved AND unresolved threads as skip set entries — unresolved threads are pending discussion; re-commenting on the same line is noise.
+
+3. **Read impacted code** for context. For each non-trivial change in the diff:
    - Read the full file the diff touches.
    - For changed function/type signatures, find callers (`grep` / `Read`) and verify they still work.
-   - For new behavior, find the test that covers it; check the inputs are realistic, not just smoke.
-
-3. **Check existing review threads** to avoid re-flagging resolved issues:
-   ```bash
-   gh api graphql -f query='{ repository(owner:"<owner>",name:"<name>") { pullRequest(number:<n>) { reviewThreads(first:100) { nodes { isResolved comments(first:1) { nodes { author { login } path line } } } } } } }'
-   ```
-   Skip lines that already have a resolved thread from your own user.
+   - For new behavior, find the test that covers it; check inputs are realistic, not smoke.
 
 ## 3. Decide Verdict
 
@@ -60,6 +76,8 @@ gh api -X POST "/repos/<owner>/<name>/pulls/<number>/reviews" --input /tmp/pr-re
 ```
 
 For inline comments, each entry in `comments` is `{"path": "<file>", "line": <line>, "body": "<text>"}`. Use `side: "RIGHT"` (default) for added/modified lines.
+
+**Hard rule:** before adding any inline comment, drop entries whose `(path, line)` matches the skip set built in Step 2.2. If after filtering you have no inline comments and no concrete finding for the body, your verdict is **APPROVE** (with audit trail) or **COMMENT** with an empty `comments` array — never re-submit a duplicate.
 
 `event` values:
 - `APPROVE`
