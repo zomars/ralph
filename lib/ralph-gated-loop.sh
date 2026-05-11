@@ -4,6 +4,7 @@
 # Usage: source this file, then call ralph_gated_loop <agent_key> <agent_name>
 
 source "$RALPH_HOME/lib/ralph-loop.sh"
+source "$RALPH_HOME/lib/ralph-pick-helpers.sh"
 
 ralph_gated_loop_once() {
   ralph_gated_loop "$1" "$2" 1
@@ -42,53 +43,6 @@ ralph_gated_loop() {
     jq '.issues | length' "$LOOP_WORK_FILE"
   }
 
-  # Traverse blocker chain to find the deepest unblocked blocker that matches
-  # the agent's query. Returns 0 and writes the blocker to $_task_file if found.
-  # Args: $1 = issue file, $2 = blocker_check mode, $3 = agent query
-  #        $4 = visited keys (colon-separated, for cycle detection)
-  _traverse_blockers() {
-    local issue_file="$1" mode="$2" query="$3" visited="$4"
-    local blocker_keys
-    blocker_keys=$(provider_get_unresolved_blocker_keys "$issue_file" "$mode")
-    [[ -z "$blocker_keys" ]] && return 1
-
-    local tmp_blocker
-    tmp_blocker=$(mktemp)
-    for bk in ${=blocker_keys}; do
-      # Cycle detection
-      [[ ":$visited:" == *":$bk:"* ]] && continue
-
-      # Fetch this blocker with the agent's query to check if it matches
-      # Strip ORDER BY clause before wrapping in parens (JQL syntax)
-      local base_query="${query%% ORDER BY *}"
-      local bk_query="($base_query) AND key = \"$bk\""
-      local tmp_result
-      tmp_result=$(mktemp)
-      provider_fetch_tasks "$bk_query" 1 > "$tmp_result"
-      local match_count
-      match_count=$(jq '.issues | length' "$tmp_result")
-
-      if (( match_count > 0 )); then
-        jq '.issues[0]' "$tmp_result" > "$tmp_blocker"
-        rm -f "$tmp_result"
-        # Check if this blocker is itself blocked — if so, recurse deeper
-        if ! provider_check_blockers "$tmp_blocker" "$mode"; then
-          if _traverse_blockers "$tmp_blocker" "$mode" "$query" "$visited:$bk"; then
-            rm -f "$tmp_blocker"
-            return 0  # deeper blocker was picked into $_task_file
-          fi
-        fi
-        # This blocker is unblocked (or its blockers don't match) — pick it
-        cp "$tmp_blocker" "$_task_file"
-        rm -f "$tmp_blocker"
-        return 0
-      fi
-      rm -f "$tmp_result"
-    done
-    rm -f "$tmp_blocker"
-    return 1
-  }
-
   loop_pick_work() {
     # instance_num is set by ralph_run_loop in the parent scope (zsh dynamic scoping)
     local task_count
@@ -108,7 +62,7 @@ ralph_gated_loop() {
       jq ".issues[$pick_idx]" "$LOOP_WORK_FILE" > "$_task_file"
       # Skip parent issues with incomplete subtasks — work the subtasks instead
       if [[ "$_skip_open_subtasks" == "true" ]]; then
-        _open_subtask_count=$(jq '[.fields.subtasks[]? | select(.fields.status.statusCategory.key != "done")] | length' "$_task_file")
+        _open_subtask_count=$(_open_subtasks_of "$_task_file")
         if (( _open_subtask_count > 0 )); then
           ralph_log "Skipping $(jq -r '.key' "$_task_file") (has $_open_subtask_count open subtask(s))"
           pick_idx=$((pick_idx + 1))
@@ -137,7 +91,7 @@ ralph_gated_loop() {
         local blocked_key
         blocked_key=$(jq -r '.key' "$_task_file")
         # Traverse blocker chain — pick the deepest unblocked blocker that matches
-        if _traverse_blockers "$_task_file" "$_blocker_check" "$_query" "$blocked_key"; then
+        if _traverse_blockers "$_task_file" "$_blocker_check" "$_query" "$blocked_key" "$_skip_open_subtasks" "$_task_file"; then
           unblocked_seen=$((unblocked_seen + 1))
           if (( unblocked_seen == instance_num )); then
             LOOP_TASK_KEY=$(jq -r '.key' "$_task_file")
