@@ -118,6 +118,13 @@ ralph_fetch_mergeable_prs() {
             isDraft
             mergeable
             reviewDecision
+            latestReviews(first: 20) {
+              nodes {
+                state
+                authorAssociation
+                author { __typename }
+              }
+            }
             reviewThreads(first: 100) {
               nodes { isResolved }
             }
@@ -142,7 +149,28 @@ ralph_fetch_mergeable_prs() {
     }" --jq '[.data.search.nodes[] |
       select(.isDraft == false) |
       select(.mergeable == "MERGEABLE") |
-      select(.reviewDecision == "APPROVED") |
+      # Approval gate:
+      # - If branch protection sets reviewDecision (APPROVED / REVIEW_REQUIRED / CHANGES_REQUESTED),
+      #   defer to it strictly — require APPROVED.
+      # - Otherwise (reviewDecision is null), accept any APPROVED review from a write-access user
+      #   (OWNER/MEMBER/COLLABORATOR) or a Bot/App, provided no CHANGES_REQUESTED is outstanding.
+      select(
+        if .reviewDecision != null then
+          .reviewDecision == "APPROVED"
+        else
+          ([.latestReviews.nodes[] | select(.state == "CHANGES_REQUESTED")] | length == 0)
+          and
+          ([.latestReviews.nodes[] |
+            select(.state == "APPROVED") |
+            select(
+              .authorAssociation == "OWNER"
+              or .authorAssociation == "MEMBER"
+              or .authorAssociation == "COLLABORATOR"
+              or .author.__typename == "Bot"
+            )
+          ] | length > 0)
+        end
+      ) |
       select([.reviewThreads.nodes[] | select(.isResolved == false)] | length == 0) |
       (.commits.nodes[0].commit.statusCheckRollup) as $rollup |
       select($rollup.state == "SUCCESS") |
