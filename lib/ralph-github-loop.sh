@@ -149,28 +149,6 @@ ralph_fetch_mergeable_prs() {
     }" --jq '[.data.search.nodes[] |
       select(.isDraft == false) |
       select(.mergeable == "MERGEABLE") |
-      # Approval gate:
-      # - If branch protection sets reviewDecision (APPROVED / REVIEW_REQUIRED / CHANGES_REQUESTED),
-      #   defer to it strictly — require APPROVED.
-      # - Otherwise (reviewDecision is null), accept any APPROVED review from a write-access user
-      #   (OWNER/MEMBER/COLLABORATOR) or a Bot/App, provided no CHANGES_REQUESTED is outstanding.
-      select(
-        if .reviewDecision != null then
-          .reviewDecision == "APPROVED"
-        else
-          ([.latestReviews.nodes[] | select(.state == "CHANGES_REQUESTED")] | length == 0)
-          and
-          ([.latestReviews.nodes[] |
-            select(.state == "APPROVED") |
-            select(
-              .authorAssociation == "OWNER"
-              or .authorAssociation == "MEMBER"
-              or .authorAssociation == "COLLABORATOR"
-              or .author.__typename == "Bot"
-            )
-          ] | length > 0)
-        end
-      ) |
       select([.reviewThreads.nodes[] | select(.isResolved == false)] | length == 0) |
       (.commits.nodes[0].commit.statusCheckRollup) as $rollup |
       select($rollup.state == "SUCCESS") |
@@ -178,8 +156,12 @@ ralph_fetch_mergeable_prs() {
         select(.status != null and .status != "COMPLETED"),
         select(.state != null and .state != "SUCCESS" and .state != "NEUTRAL")
       ] | length == 0) |
-      {number, title, url, headRefName, baseRefName}
-    ]' 2>/dev/null || echo "[]"
+      # Keep reviewDecision + latestReviews on the object so the approval helper can read them.
+      {number, title, url, headRefName, baseRefName, reviewDecision, latestReviews}
+    ]' 2>/dev/null \
+    | node "$RALPH_HOME/lib/pr-approval.mjs" --filter 2>/dev/null \
+    | jq '[.[] | {number, title, url, headRefName, baseRefName}]' 2>/dev/null \
+    || echo "[]"
 }
 
 ralph_check_github_prs() {
