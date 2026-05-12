@@ -6,6 +6,7 @@
 # It gates on GitHub PRs needing attention.
 
 source "$RALPH_HOME/lib/ralph-loop.sh"
+source "$RALPH_HOME/lib/ralph-github-app.sh"
 
 # ─── PR fetch functions ──────────────────────────────────────────────────────
 
@@ -166,7 +167,11 @@ ralph_fetch_pr_reviewer_prs() {
     echo "[]"
     return
   fi
-  bot_user=$(gh api user --jq '.login' 2>/dev/null) || bot_user=""
+  # GitHub App installation tokens can't hit /user — derive bot login from the App slug.
+  # GraphQL author.login on Bot accounts is the bare slug (no "[bot]" suffix), even
+  # though REST and the GitHub UI display "<slug>[bot]". The slug is required at
+  # loop_init via ralph_require_pr_reviewer_app_config.
+  bot_user="${RALPH_PR_REVIEWER_APP_SLUG}"
 
   local owner="${repo%%/*}"
   local name="${repo##*/}"
@@ -189,6 +194,7 @@ ralph_fetch_pr_reviewer_prs() {
             commits(last: 1) {
               nodes {
                 commit {
+                  oid
                   committedDate
                   statusCheckRollup { state }
                 }
@@ -302,13 +308,15 @@ ralph_github_loop() {
   # ─── Callbacks ──────────────────────────────────────────────────────────
 
   loop_init() {
-    # Per-agent GitHub identity override. When set, every gh / gh api call in
-    # this loop process (fetch + agent invocation) authenticates as the bot
-    # account instead of the operator's keyring user.
+    # pr-reviewer authenticates as a GitHub App (no PAT, no operator keyring).
+    # Validate config and mint a preflight installation token so misconfig
+    # fails loudly before the first iteration.
     case "$_agent_key" in
       pr-reviewer)
-        if [[ -n "${RALPH_PR_REVIEWER_TOKEN:-}" ]]; then
-          export GH_TOKEN="$RALPH_PR_REVIEWER_TOKEN"
+        ralph_require_pr_reviewer_app_config
+        if ! ralph_refresh_pr_reviewer_token; then
+          ralph_error "pr-reviewer: failed to mint GitHub App installation token. See stderr above."
+          exit 1
         fi
         ;;
     esac
@@ -318,7 +326,9 @@ ralph_github_loop() {
       ralph_error "gh CLI is not installed. Install it: https://cli.github.com/"
       exit 1
     fi
-    if ! gh auth status &>/dev/null; then
+    # pr-reviewer uses GH_TOKEN (App installation token); other agents use the
+    # operator's keyring auth.
+    if [[ "$_agent_key" != "pr-reviewer" ]] && ! gh auth status &>/dev/null; then
       ralph_error "gh CLI is not authenticated. Run: gh auth login"
       exit 1
     fi
@@ -344,6 +354,11 @@ ralph_github_loop() {
   }
 
   loop_fetch_work() {
+    # Refresh the installation token at the start of every iteration. The 1h
+    # TTL then covers the fetch GraphQL call + the subsequent Claude run.
+    if [[ "$_agent_key" == "pr-reviewer" ]]; then
+      ralph_refresh_pr_reviewer_token || ralph_log "pr-reviewer: token refresh failed; using previous token"
+    fi
     # Tolerate transient provider outages: fall back to an empty array so
     # the loop sees zero work and re-polls instead of aborting under `set -e`.
     _ralph_github_fetch_for_agent "$_agent_key" > "$LOOP_WORK_FILE" || echo '[]' > "$LOOP_WORK_FILE"

@@ -30,12 +30,21 @@ export RALPH_POLL_INTERVAL=5
 # Auto-detected: if unset and scripts/worktree-setup.sh exists, it runs automatically.
 # export RALPH_WORKTREE_SETUP="bash scripts/worktree-setup.sh && npm install"
 
-# PR Reviewer GitHub identity override.
-# Empty = use the operator's existing gh auth (same identity as all other ralph agents).
-# Set to a fine-grained PAT (pull_requests:write + contents:read) for a dedicated bot user
-# (e.g. ralph-pr-reviewer) so reviews are attributable. Scoped via GH_TOKEN to the
-# pr-reviewer process only — does not affect implementer/fixer/merger.
-# export RALPH_PR_REVIEWER_TOKEN=""
+# PR Reviewer GitHub App identity (REQUIRED for pr-reviewer).
+# Reviews are posted as <slug>[bot] using a short-lived installation token
+# minted from the App's private key. No personal access token, no org seat.
+#
+# Setup:
+#   1. Register a GitHub App (Settings → Developer settings → GitHub Apps).
+#      Permissions: pull_requests:write, contents:read, checks:read, metadata:read. No webhook.
+#   2. Generate a private key, save it to ~/.ralph/pr-reviewer.pem (chmod 600).
+#   3. Install the App on the target repo and record the Installation ID.
+#   4. Fill in the four values below.
+#
+# export RALPH_PR_REVIEWER_APP_ID="123456"
+# export RALPH_PR_REVIEWER_INSTALLATION_ID="7890123"
+# export RALPH_PR_REVIEWER_APP_SLUG="ralph-pr-reviewer"
+# export RALPH_PR_REVIEWER_APP_PRIVATE_KEY="$HOME/.ralph/pr-reviewer.pem"
 
 # Per-agent model override (haiku, sonnet, opus, or raw model ID)
 # Built-in defaults: planner=opus, implementer/reviewer/tester/refactor/fixer=sonnet, documenter/merger=haiku
